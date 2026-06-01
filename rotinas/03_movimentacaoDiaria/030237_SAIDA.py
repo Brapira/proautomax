@@ -100,10 +100,10 @@ def executar(driver, **kwargs):
 
         driver.execute_script("return Visualizar();")
         
-        aguardar_processamento()
-        
         if aceitar_alertas(driver):
             return "skip"      
+        
+        aguardar_processamento()        
             
     except Exception as e:
             logging.error(f"❌ Erro ao executar Visualizar(): {e}")
