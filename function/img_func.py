@@ -12,18 +12,19 @@ SALVAR_BTN_2 = os.getenv("PATH_IMAGE_SAVE_2")
 VISUALIZAR_BTN = os.getenv("PATH_IMAGE_VISUALIZAR")
 PROCESSANDO_IMG = os.getenv("PATH_IMAGE_PROCESSANDO")
 
-def encontrar_imagem(caminhoImagem, timeout=None, confidence=0.6):
+def encontrar_imagem(caminhoImagem, timeout=None, confidence=0.6, opcional=False):
     inicio = time.time()
     tentativas = 0
+    ja_encontrou = False  # 🆕 rastreia se já apareceu alguma vez
 
     while True:
         try:
             pos = pyautogui.locateOnScreen(caminhoImagem, confidence=confidence)
 
             if pos:
-                
                 if "processando" not in caminhoImagem.lower():
                     logging.info(f"✅ Imagem encontrada: {caminhoImagem}")
+                ja_encontrou = True
                 return pos
 
         except pyautogui.ImageNotFoundException:
@@ -31,21 +32,18 @@ def encontrar_imagem(caminhoImagem, timeout=None, confidence=0.6):
 
         tentativas += 1
 
-        # Log a cada X tentativas (evita spam)
         if tentativas % 10 == 0:
             logging.info(f"🔍 Procurando imagem... ({tentativas} tentativas)")
 
-        # Timeout
         if timeout and (time.time() - inicio > timeout):
-            screenshot_nome = f"erro_{int(time.time())}.png"
-            pyautogui.screenshot(screenshot_nome)
+            # 🆕 Se é opcional OU já apareceu antes (processou rápido), não é erro
+            if opcional or ja_encontrou:
+                logging.info(f"⏭️ Imagem não encontrada (ignorado): {caminhoImagem}")
+                return None
 
             logging.error(f"❌ Imagem não encontrada após {timeout}s: {caminhoImagem}")
-            logging.error(f"📸 Screenshot salvo: {screenshot_nome}")
-
             raise TimeoutError(f"Imagem não encontrada: {caminhoImagem}")
 
-        # 🔥 mantém tela “viva” (importantíssimo no VNC)
         try:
             pyautogui.moveRel(1, 0)
             pyautogui.moveRel(-1, 0)
@@ -99,7 +97,7 @@ def aguardar_processamento():
         while True:
 
             try:                    
-                encontrar_imagem(PROCESSANDO_IMG, timeout=2)
+                encontrar_imagem(PROCESSANDO_IMG, timeout=3)
                 agora = time.time()
 
                 # ainda existe
