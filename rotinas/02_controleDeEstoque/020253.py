@@ -9,8 +9,9 @@ from function.abrir_rotinas import abrir_rotinas
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from function.aceitar_alertas import aceitar_alertas
 from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt
-from function.img_func import VISUALIZAR_BTN, encontrar_imagem, clicar_imagem, CSV_BTN
+from function.img_func import VISUALIZAR_BTN, aguardar_processamento, encontrar_imagem, clicar_imagem, CSV_BTN
 from function.troca_janela import trocar_para_nova_janela
 import time
 import pyautogui
@@ -69,19 +70,12 @@ def executar(driver, **kwargs):
             return "skip"            
 
         driver.execute_script("return Visualizar();")
-        logging.info("⏳ Aguardando sair do 'Processando...'")
-
-        try:
-            WebDriverWait(driver, 600).until(
-                EC.invisibility_of_element_located(
-                    (By.XPATH, "//*[contains(text(),'Processando')]")
-                )
-            )
-        except TimeoutError:
-            logging.warning("⚠️ 'Processando...' não sumiu (pode não existir ou mudou texto)")
-
-        time.sleep(2)
-
+        
+        if aceitar_alertas(driver):
+            return "skip" 
+        
+        aguardar_processamento()
+        
     except Exception as e:
         logging.error(f"❌ Erro ao executar Visualizar(): {e}")
         return "skip"       
@@ -105,5 +99,4 @@ def executar(driver, **kwargs):
     # Clica no CSV para baixar
     time.sleep(2)
     clicar_imagem(CSV_BTN)
-
     logging.info("⏳ Aguardando download...")
