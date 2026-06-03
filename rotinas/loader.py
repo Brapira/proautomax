@@ -12,7 +12,11 @@ def carregar_rotinas():
     ):
         module = importlib.import_module(module_info.name)
 
-        if hasattr(module, "CODIGO_ROTINA") and hasattr(module, "executar"):
-            registradas[module.CODIGO_ROTINA] = module.executar
+        if hasattr(module, "executar"):
+            codigos = getattr(module, "CODIGOS_ROTINA", None) or (
+                [module.CODIGO_ROTINA] if hasattr(module, "CODIGO_ROTINA") else []
+            )
+            for codigo in codigos:
+                registradas[codigo] = module.executar
 
     return registradas

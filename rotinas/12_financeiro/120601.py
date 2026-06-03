@@ -17,9 +17,11 @@ from function.troca_janela import trocar_para_nova_janela
 from function.data_func import data_ontem
 
 CODIGO_ROTINA = "120601"
+CODIGOS_ROTINA = ["120601", "120601_SEMDATA"]
 
 
 def executar(driver, **kwargs):
+    sem_data = kwargs.get("semData", False)
 
     focar_janela_promax()
     abrir_rotinas(driver, CODIGO_ROTINA)
@@ -41,9 +43,10 @@ def executar(driver, **kwargs):
     driver.execute_script("arguments[0].value = '01'; arguments[0].onchange();", select_quebra1)
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Quebra 1 configurada para classificação numérica")
 
-    vencimento_final = wait.until(EC.presence_of_element_located((By.NAME, "fimVencimento")))
-    driver.execute_script(f"arguments[0].value = '{data_ontem()}';", vencimento_final)
-    logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Vencimento final configurado para {data_ontem()}")
+    if not sem_data:
+        vencimento_final = wait.until(EC.presence_of_element_located((By.NAME, "fimVencimento")))
+        driver.execute_script(f"arguments[0].value = '{data_ontem()}';", vencimento_final)
+        logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Vencimento final configurado para {data_ontem()}")
 
     logging.info("📤 Executando Visualizar via JavaScript...")
     try:

@@ -10,6 +10,7 @@ Mudanças em relação à versão anterior:
 import json
 import logging
 import os
+import re
 import time
 import traceback
 
@@ -18,6 +19,10 @@ from function.download import salvar_arquivo
 from function.data_func import ano_vigente, gerar_nome_mes_vigente
 from function.ai_vision import diagnosticar_e_decidir, relatorio_uso_tokens
 from function.teams_notify import notificar_inicio, notificar_fim, notificar_erro_critico
+
+
+def _resolver_caminho(caminho: str) -> str:
+    return re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), m.group(0)), caminho)
 
 
 def executar_rotinas(driver, rotinas_registradas, caminho_json):
@@ -85,7 +90,7 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
         else:
             nome = item.get("nome", f"{codigo}.csv")
 
-        destino  = item["destino"]
+        destino  = _resolver_caminho(item["destino"])
         descricao = item.get("descricao", codigo)
 
         logging.info("=" * 60)
