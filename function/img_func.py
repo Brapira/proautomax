@@ -1,6 +1,5 @@
 import logging
 import time
-import traceback
 import pyautogui
 import os
 
@@ -11,6 +10,7 @@ SALVAR_BTN = os.getenv("PATH_IMAGE_SAVE")
 SALVAR_BTN_2 = os.getenv("PATH_IMAGE_SAVE_2")
 VISUALIZAR_BTN = os.getenv("PATH_IMAGE_VISUALIZAR")
 PROCESSANDO_IMG = os.getenv("PATH_IMAGE_PROCESSANDO")
+
 
 def encontrar_imagem(caminhoImagem, timeout=None, confidence=0.6, opcional=False):
     inicio = time.time()
@@ -51,23 +51,7 @@ def encontrar_imagem(caminhoImagem, timeout=None, confidence=0.6, opcional=False
             pass
 
         time.sleep(0.5)
-# Só procura a imagem e retorna a posição se encontrar. Timeout em segundos.
-# def encontrar_imagem(caminhoImagem, timeout=None):
-#     inicio = time.time()
-#     while True:
-#         try:
-#             pos = pyautogui.locateOnScreen(caminhoImagem, confidence=0.8)
-#             if pos:
-#                 logging.info("✅ Botão encontrado!")
-#                 return pos
-#         except:
-#             pass
-            
-#         if timeout and (time.time() - inicio > timeout):
-#             logging.error(f"❌ Imagem não encontrada após {timeout} segundos.")
-#             raise TimeoutError(f"❌ Imagem não encontrada após {timeout} segundos.")
-            
-#         time.sleep(0.5)
+
 
 # Encontra a imagem e clica
 def clicar_imagem(caminhoImagem, timeout=120):
@@ -79,12 +63,14 @@ def clicar_imagem(caminhoImagem, timeout=120):
             pyautogui.click(pyautogui.center(pos))
             logging.info("Botão clicado!")
     except TimeoutError:
-        logging.error(f"❌ Não foi possível encontrar/clicar na imagem: {caminhoImagem}")
-        
+        logging.error(
+            f"❌ Não foi possível encontrar/clicar na imagem: {caminhoImagem}"
+        )
+
+
 def aguardar_processamento():
     logging.info("⏳ Verificando processamento visual...")
     try:
-
         # espera a tela de processamento aparecer
         encontrar_imagem(PROCESSANDO_IMG, timeout=15)
 
@@ -95,8 +81,7 @@ def aguardar_processamento():
         ultimo_log = 0
 
         while True:
-
-            try:                    
+            try:
                 encontrar_imagem(PROCESSANDO_IMG, timeout=3)
                 agora = time.time()
 
@@ -115,6 +100,4 @@ def aguardar_processamento():
         logging.info("✅ Processamento finalizado")
 
     except TimeoutError:
-
         logging.info("ℹ️ Tela de processamento não apareceu")
-    

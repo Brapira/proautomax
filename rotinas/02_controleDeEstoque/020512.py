@@ -11,9 +11,9 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from function.aceitar_alertas import aceitar_alertas
 from function.data_func import primeiro_dia_ano
-from function.img_func import CSV_BTN, VISUALIZAR_BTN, clicar_imagem, encontrar_imagem
+from function.img_func import CSV_BTN, aguardar_processamento, clicar_imagem
 from function.troca_janela import trocar_para_nova_janela
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt, desmarcar_item, marcar_item
+from function.funcoes_rotina import aguardar_tela_carregar, desmarcar_item, marcar_item
 import time
 import pyautogui
 
@@ -64,34 +64,27 @@ def executar(driver, **kwargs):
     logging.info("📤 Executando Visualizar via JavaScript...")
 
     try:
-        funcao_existe = driver.execute_script("return typeof Visualizar === 'function';")
+        funcao_existe = driver.execute_script(
+            "return typeof Visualizar === 'function';"
+        )
         if not funcao_existe:
             logging.error("❌ Função Visualizar() não encontrada na página.")
-            return "skip"            
+            return "skip"
 
         driver.execute_script("return Visualizar();")
 
-    except Exception as e:
-        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
-        return "skip"       
+        time.sleep(2)
 
-    try:
-        logging.info("⏳ Aguardando processamento do relatório (até 2 min)...")
-        encontrar_imagem(CSV_BTN, timeout=120)
-
-    except TimeoutError:
-        logging.warning("⚠️ Relatório demorou demais. Tentando novamente...")
-
-        try:
-            driver.execute_script("return Visualizar();")
-            encontrar_imagem(CSV_BTN, timeout=180)
-        except TimeoutError:
-            logging.error("❌ Falha crítica: relatório não foi gerado.")
+        if aceitar_alertas(driver):
             return "skip"
 
+        aguardar_processamento()
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
+        return "skip"
+
     logging.info("⏳ Relatório gerado! Iniciando download...")
-    
-    # Clica no CSV para baixar
     time.sleep(2)
     clicar_imagem(CSV_BTN)
     logging.info("⏳ Aguardando download...")

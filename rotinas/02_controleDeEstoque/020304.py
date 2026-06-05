@@ -1,19 +1,18 @@
 """
 Rotina: 02.03.04
-Descrição: Baixa um CSV com relatório de saldo da grade.
+Descrição: Baixa um CSV com relatório de saldo da grade referênte ao dia anterior.
 Autor: Carol
 """
 
 import logging
-import os
 from function.abrir_rotinas import abrir_rotinas
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from function.aceitar_alertas import aceitar_alertas
 from function.data_func import data_ontem
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt
-from function.img_func import CSV_BTN, VISUALIZAR_BTN, clicar_imagem, encontrar_imagem
+from function.funcoes_rotina import aguardar_tela_carregar
+from function.img_func import CSV_BTN, aguardar_processamento, clicar_imagem
 from function.troca_janela import trocar_para_nova_janela
 import time
 import pyautogui
@@ -25,7 +24,7 @@ CODIGO_ROTINA = "020304"
 
 def executar(driver, **kwargs):
     """
-    Função principal da rotina.    
+    Função principal da rotina.
     """
 
     abrir_rotinas(driver, CODIGO_ROTINA)
@@ -40,7 +39,6 @@ def executar(driver, **kwargs):
     pyautogui.FAILSAFE = False
     pyautogui.moveTo(width / 2, height / 2)
     pyautogui.FAILSAFE = True
-    
 
     logging.info("⚙️ Configurando parâmetros da rotina 02.03.04 ...")
 
@@ -51,59 +49,37 @@ def executar(driver, **kwargs):
     data = wait.until(EC.presence_of_element_located((By.NAME, "data")))
 
     driver.execute_script(f"arguments[0].value = '{data_ontem()}';", data)
-    logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Data inicial configurada para {data_ontem()}")
-    
+    logging.info(
+        f"ROTINA {CODIGO_ROTINA}:⚙️ Data inicial configurada para {data_ontem()}"
+    )
+
     time.sleep(2)
 
     # Testando clicar no botão visualizar com JavaScript
     logging.info("📤 Executando Visualizar via JavaScript...")
 
     try:
-        funcao_existe = driver.execute_script("return typeof Visualizar === 'function';")
+        funcao_existe = driver.execute_script(
+            "return typeof Visualizar === 'function';"
+        )
         if not funcao_existe:
             logging.error("❌ Função Visualizar() não encontrada na página.")
-            return "skip"            
+            return "skip"
 
         driver.execute_script("return Visualizar();")
-        logging.info("⏳ Aguardando sair do 'Processando...'")
 
-        try:
-            WebDriverWait(driver, 600).until(
-                EC.invisibility_of_element_located(
-                    (By.XPATH, "//*[contains(text(),'Processando')]")
-                )
-            )
-        except TimeoutError:
-            logging.warning("⚠️ 'Processando...' não sumiu (pode não existir ou mudou texto)")
+        time.sleep(2)
+
+        if aceitar_alertas(driver):
+            return "skip"
+
+        aguardar_processamento()
 
     except Exception as e:
         logging.error(f"❌ Erro ao executar Visualizar(): {e}")
-        return "skip"       
-
-    try:
-        logging.info("⏳ Aguardando processamento do relatório (até 2 min)...")
-        time.sleep(15)
-
-        # Verifica se há algum alerta if alerta True ? skip : continue 
-        if aceitar_alertas(driver):
-            return "skip"
-        
-        encontrar_imagem(CSV_BTN, timeout=300)
-
-    except TimeoutError:
-        logging.warning("⚠️ Relatório demorou demais. Tentando novamente...")
-
-        try:
-            driver.execute_script("return Visualizar();")
-            encontrar_imagem(CSV_BTN, timeout=300)
-        except TimeoutError:
-            logging.error("❌ Falha crítica: relatório não foi gerado.")
-            return "skip"
+        return "skip"
 
     logging.info("⏳ Relatório gerado! Iniciando download...")
-    
-    # Clica no CSV para baixar
     time.sleep(2)
     clicar_imagem(CSV_BTN)
-
     logging.info("⏳ Aguardando download...")

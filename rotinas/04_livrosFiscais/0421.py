@@ -3,13 +3,15 @@ Rotina: 04.21
 Descrição: Baixa um CSV com relatório de registro de inventário.
 Autor: Carol
 """
+
 import logging
 from function.abrir_rotinas import abrir_rotinas
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt
-from function.img_func import SALVAR_BTN_2, VISUALIZAR_BTN, clicar_imagem, encontrar_imagem
+from function.aceitar_alertas import aceitar_alertas
+from function.funcoes_rotina import aguardar_tela_carregar
+from function.img_func import SALVAR_BTN_2, aguardar_processamento, clicar_imagem
 from function.troca_janela import trocar_para_nova_janela
 import time
 import pyautogui
@@ -20,7 +22,7 @@ CODIGO_ROTINA = "0421"
 
 def executar(driver, **kwargs):
     """
-    Função principal da rotina.    
+    Função principal da rotina.
     """
 
     abrir_rotinas(driver, CODIGO_ROTINA)
@@ -34,7 +36,7 @@ def executar(driver, **kwargs):
     width, height = pyautogui.size()
     pyautogui.FAILSAFE = False
     pyautogui.moveTo(width / 2, height / 2)
-    pyautogui.FAILSAFE = True    
+    pyautogui.FAILSAFE = True
 
     logging.info("⚙️ Configurando parâmetros da rotina 04.21...")
 
@@ -44,46 +46,58 @@ def executar(driver, **kwargs):
 
     combo = driver.find_element("name", "opcaoCusto")
 
-    driver.execute_script("""
+    driver.execute_script(
+        """
         var select = arguments[0];
         select.value = "3";
         if (select.onchange) {
             select.onchange();
         }
-    """, combo)
+    """,
+        combo,
+    )
     logging.info("⚙️ Selecionando opção de preço médio de reposição...")
     time.sleep(0.5)
 
     checkbox_vasilhame = driver.find_element("name", "checkVasilhame")
 
-    driver.execute_script("""
+    driver.execute_script(
+        """
         var cb = arguments[0];
         cb.checked = false;
         if (cb.onclick) cb.onclick();
         if (cb.onchange) cb.onchange();
-    """, checkbox_vasilhame)
+    """,
+        checkbox_vasilhame,
+    )
     logging.info("⚙️ Revomendo flag de Vasilhame...")
     time.sleep(0.5)
 
     checkbox_garrafeira = driver.find_element("name", "checkGarrafeira")
 
-    driver.execute_script("""
+    driver.execute_script(
+        """
         var cb = arguments[0];
         cb.checked = false;
         if (cb.onclick) cb.onclick();
         if (cb.onchange) cb.onchange();
-    """, checkbox_garrafeira)
+    """,
+        checkbox_garrafeira,
+    )
     logging.info("⚙️ Revomendo flag de Garrafeira...")
     time.sleep(0.5)
 
     checkbox_material = driver.find_element("name", "checkMaterial")
 
-    driver.execute_script("""
+    driver.execute_script(
+        """
         var cb = arguments[0];
         cb.checked = false;
         if (cb.onclick) cb.onclick();
         if (cb.onchange) cb.onchange();
-    """, checkbox_material)
+    """,
+        checkbox_material,
+    )
     logging.info("⚙️ Revomendo flag de Material...")
     time.sleep(0.5)
 
@@ -94,39 +108,32 @@ def executar(driver, **kwargs):
     logging.info("⚙️ Selecionando Depósito opção 01 Central...")
 
     time.sleep(2)
-    
+
     # Testando clicar no botão visualizar com JavaScript
     logging.info("📤 Executando Visualizar via JavaScript...")
 
     try:
-        funcao_existe = driver.execute_script("return typeof Visualizar === 'function';")
+        funcao_existe = driver.execute_script(
+            "return typeof Visualizar === 'function';"
+        )
         if not funcao_existe:
             logging.error("❌ Função Visualizar() não encontrada na página.")
-            return "skip"            
+            return "skip"
 
         driver.execute_script("return Visualizar();")
 
-    except Exception as e:
-        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
-        return "skip"       
+        time.sleep(2)
 
-    try:
-        logging.info("⏳ Aguardando processamento do relatório (até 2 min)...")
-        encontrar_imagem(SALVAR_BTN_2, timeout=120)
-
-    except TimeoutError:
-        logging.warning("⚠️ Relatório demorou demais. Tentando novamente...")
-
-        try:
-            driver.execute_script("return Visualizar();")
-            encontrar_imagem(SALVAR_BTN_2, timeout=180)
-        except TimeoutError:
-            logging.error("❌ Falha crítica: relatório não foi gerado.")
+        if aceitar_alertas(driver):
             return "skip"
 
+        aguardar_processamento()
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
+        return "skip"
+
     logging.info("⏳ Relatório gerado! Iniciando download...")
-    
-    # Clica no botão salvar para baixar
     time.sleep(2)
     clicar_imagem(SALVAR_BTN_2)
     logging.info("⏳ Aguardando download...")

@@ -8,11 +8,10 @@ import logging
 
 from function.abrir_rotinas import abrir_rotinas
 from function.aceitar_alertas import aceitar_alertas
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt
+from function.funcoes_rotina import aguardar_tela_carregar
 from function.troca_janela import trocar_para_nova_janela
-from function.img_func import clicar_imagem, encontrar_imagem, CSV_BTN, VISUALIZAR_BTN
+from function.img_func import CSV_BTN, aguardar_processamento, clicar_imagem
 from selenium.webdriver.common.by import By
-from selenium.common.exceptions import TimeoutException
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 import time
@@ -20,16 +19,16 @@ import pyautogui
 from function.data_func import primeiro_dia_mes
 
 
-
 # Código da rotina no Promax
 CODIGO_ROTINA = "030237_ENTRADA"
+
 
 def executar(driver, **kwargs):
     """
     Função principal da rotina.
     """
 
-    abrir_rotinas(driver, '030237')
+    abrir_rotinas(driver, "030237")
     trocar_para_nova_janela(driver)
     driver.maximize_window()
 
@@ -41,7 +40,7 @@ def executar(driver, **kwargs):
     pyautogui.FAILSAFE = False
     pyautogui.moveTo(width / 2, height / 2)
     pyautogui.FAILSAFE = True
-    
+
     logging.info("⚙️ Configurando parâmetros da rotina 03.02.37 de entrada...")
 
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.NAME, "rotina")))
@@ -53,7 +52,9 @@ def executar(driver, **kwargs):
     # -------------------------
     select_quebra1 = wait.until(EC.presence_of_element_located((By.NAME, "quebra1")))
 
-    driver.execute_script("arguments[0].value = '14'; arguments[0].onchange();", select_quebra1)
+    driver.execute_script(
+        "arguments[0].value = '14'; arguments[0].onchange();", select_quebra1
+    )
 
     logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Quebra 1 configurada para Operação (14)")
 
@@ -62,138 +63,92 @@ def executar(driver, **kwargs):
     # -------------------------
     select_quebra2 = wait.until(EC.presence_of_element_located((By.NAME, "quebra2")))
 
-    driver.execute_script("arguments[0].value = '29'; arguments[0].onchange();", select_quebra2)
+    driver.execute_script(
+        "arguments[0].value = '29'; arguments[0].onchange();", select_quebra2
+    )
 
-    logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Quebra 2 configurada para Código Fiscal (29)")
+    logging.info(
+        f"ROTINA {CODIGO_ROTINA}:⚙️ Quebra 2 configurada para Código Fiscal (29)"
+    )
 
     # -------------------------
     # Itens = Sim
     # Notas = Entrada
     # -------------------------
     radio_itens = wait.until(
-
-      EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='radio'][name='itens'][value='S']"))
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "input[type='radio'][name='itens'][value='S']")
+        )
     )
 
     if not radio_itens.is_selected():
+        radio_itens.click()
+        logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Itens configurados para Sim")
 
-      radio_itens.click()
-      logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Itens configurados para Sim")
-    
     radio_itens2 = wait.until(
-
-            EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='radio'][name='notas'][value='NE']"))
-            )
+        EC.presence_of_element_located(
+            (By.CSS_SELECTOR, "input[type='radio'][name='notas'][value='NE']")
+        )
+    )
 
     if not radio_itens2.is_selected():
-
         radio_itens2.click()
         logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Notas de entrada configurado para Sim")
-    
-    
+
     checkbox = wait.until(
         EC.presence_of_element_located(
-            (By.CSS_SELECTOR, "input[type='checkbox'][name='listaNotaCompra'][value='S']")
+            (
+                By.CSS_SELECTOR,
+                "input[type='checkbox'][name='listaNotaCompra'][value='S']",
             )
         )
+    )
 
     if not checkbox.is_selected():
         driver.execute_script("arguments[0].click();", checkbox)
-        logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Checkbox de Lista NFs de Compra flagada...")
+        logging.info(
+            f"ROTINA {CODIGO_ROTINA}:⚙️ Checkbox de Lista NFs de Compra flagada..."
+        )
 
     # -------------------------
     # Data inicial = primeiro dia do mês atual
     # Data final = hoje
-    # -------------------------   
+    # -------------------------
 
     data_inicial = wait.until(EC.presence_of_element_located((By.NAME, "dataInicial")))
 
     driver.execute_script(f"arguments[0].value = '{primeiro_dia_mes()}';", data_inicial)
-    logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Data inicial configurada para {primeiro_dia_mes()}")
+    logging.info(
+        f"ROTINA {CODIGO_ROTINA}:⚙️ Data inicial configurada para {primeiro_dia_mes()}"
+    )
 
     time.sleep(2)
 
+    # Testando clicar no botão visualizar com JavaScript
     logging.info("📤 Executando Visualizar via JavaScript...")
 
     try:
-        funcao_existe = driver.execute_script("return typeof Visualizar === 'function';")
+        funcao_existe = driver.execute_script(
+            "return typeof Visualizar === 'function';"
+        )
         if not funcao_existe:
             logging.error("❌ Função Visualizar() não encontrada na página.")
-            return "skip"            
-        
-        print('caiu aqui antes do driver execute botão visualizar')
-        driver.execute_async_script("""
-            var callback = arguments[arguments.length - 1];
-            try {
-                Visualizar();
-                callback();
-            } catch(e) {
-                callback(e);
-            }
-            """)
-        logging.info("⏳ Aguardando sair do 'Processando...'")
+            return "skip"
 
-        try:
-            WebDriverWait(driver, 600).until(
-                EC.invisibility_of_element_located(
-                    (By.XPATH, "//*[contains(text(),'Processando')]")
-                )
-            )
-            logging.info("✅ Texto de 'Processamento...' sumiu, continuando execução")
-
-        except TimeoutException:
-            logging.warning("⚠️ 'Processando...' não sumiu (pode não existir ou mudou texto)")
+        driver.execute_script("return Visualizar();")
 
         time.sleep(2)
-        
-    except Exception as e:
-        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
-        return "skip"       
 
-    try:
-        logging.info("⏳ Aguardando processamento do relatório (até 2 min)...")
-        
-        # Verifica se há algum alerta if alerta True ? skip : continue 
         if aceitar_alertas(driver):
             return "skip"
-        
-        encontrar_imagem(CSV_BTN, timeout=120)
 
-    except TimeoutError:
-        logging.warning("⚠️ Relatório demorou demais. Tentando novamente...")
+        aguardar_processamento()
 
-        try:
-            driver.execute_script("return Visualizar();")
-            encontrar_imagem(CSV_BTN, timeout=180)
-        except TimeoutError:
-            logging.error("❌ Falha crítica: relatório não foi gerado.")
-            return "skip"
-
-    # logging.info("📤 Tentando usar o atalho Alt+V para visualizar...")
-    # atalho_alt("v")
-    # time.sleep(5)
-
-    # # Verifica se o botão do CSV aparece (sucesso do Alt+V)
-    # # Se não aparecer em 300s (5 min), assume falha e tenta clicar no visualizar manualmente
-    # try:
-    #     # Tenta encontrar o botão CSV que indica que o relatório carregou
-    #     logging.info("⏳ Aguardando processamento do relatório (Até 2 min)...")
-    #     encontrar_imagem(CSV_BTN, timeout=120) 
-    # except TimeoutError:
-    #     logging.warning("❌ Atalho Alt+V falhou ou demorou demais. Tentando clicar em Visualizar manualmente...")
-    #     clicar_imagem(VISUALIZAR_BTN, timeout=10) # Tenta clicar no botão visualizar
-        
-    #     # Espera novamente pelo resultado
-    #     logging.info("⏳ Aguardando processamento (2ª tentativa)...")
-    #     try:
-    #         encontrar_imagem(CSV_BTN, timeout=300)
-    #     except TimeoutError:
-    #         logging.error("❌ Falha crítica: Relatório não carregou.")
-    #         return
+    except Exception as e:
+        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
+        return "skip"
 
     logging.info("⏳ Relatório gerado! Iniciando download...")
-
-    # Clica no CSV para baixar
     time.sleep(2)
     clicar_imagem(CSV_BTN)
     logging.info("⏳ Aguardando download...")

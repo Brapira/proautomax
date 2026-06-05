@@ -7,9 +7,10 @@ Autor: Carol
 import logging
 
 from function.abrir_rotinas import abrir_rotinas
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt
+from function.aceitar_alertas import aceitar_alertas
+from function.funcoes_rotina import aguardar_tela_carregar
 from function.troca_janela import trocar_para_nova_janela
-from function.img_func import clicar_imagem, encontrar_imagem, CSV_BTN, VISUALIZAR_BTN
+from function.img_func import CSV_BTN, aguardar_processamento, clicar_imagem
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import Select, WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -19,6 +20,7 @@ from function.data_func import ano_vigente
 
 # Código da rotina no Promax
 CODIGO_ROTINA = "150501"
+
 
 def executar(driver, **kwargs):
     """
@@ -37,7 +39,6 @@ def executar(driver, **kwargs):
     pyautogui.FAILSAFE = False
     pyautogui.moveTo(width / 2, height / 2)
     pyautogui.FAILSAFE = True
-    
 
     logging.info("⚙️ Configurando parâmetros da rotina 15.05.01...")
 
@@ -50,13 +51,17 @@ def executar(driver, **kwargs):
     # -------------------------
     select_quebra1 = wait.until(EC.presence_of_element_located((By.NAME, "idPeriodo")))
 
-    driver.execute_script("arguments[0].value = 'A'; arguments[0].onchange();", select_quebra1)
+    driver.execute_script(
+        "arguments[0].value = 'A'; arguments[0].onchange();", select_quebra1
+    )
 
-    logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Quebra 1 configurada para Período Anual (A)")
+    logging.info(
+        f"ROTINA {CODIGO_ROTINA}:⚙️ Quebra 1 configurada para Período Anual (A)"
+    )
 
     # -------------------------
     # Data = Ano vigente
-    # -------------------------   
+    # -------------------------
 
     data_inicial = wait.until(EC.presence_of_element_located((By.NAME, "dtAno")))
 
@@ -75,18 +80,22 @@ def executar(driver, **kwargs):
     time.sleep(1)
 
     # Seleciona a opção "9999 -  Todos" porque é diferente do de cima? não me pergunte
-    select_nbz = Select(wait.until(EC.presence_of_element_located((By.NAME, "cdDepto"))))
+    select_nbz = Select(
+        wait.until(EC.presence_of_element_located((By.NAME, "cdDepto")))
+    )
     select_nbz.select_by_value("9999")
     driver.execute_script("AdicionaDepto();")
     lista = driver.find_element(By.NAME, "cdDeptoLista")
 
     if lista.find_elements(By.TAG_NAME, "option"):
         logging.info("Depto adicionada com sucesso")
-    
+
     time.sleep(1)
 
     # Seleciona opção "9999 - Todos" de pacote, e sim... muda novamente o código, virou um botão...
-    select_pacote = Select(wait.until(EC.presence_of_element_located((By.NAME, "cdPacote"))))
+    select_pacote = Select(
+        wait.until(EC.presence_of_element_located((By.NAME, "cdPacote")))
+    )
     select_pacote.select_by_value("9999")
     driver.execute_script("AdicionaPacote();")
 
@@ -112,7 +121,9 @@ def executar(driver, **kwargs):
     time.sleep(1)
 
     # Seleciona opção "9999999999 - Todos" de Conta
-    select_vbz = Select(wait.until(EC.presence_of_element_located((By.NAME, "cdConta"))))
+    select_vbz = Select(
+        wait.until(EC.presence_of_element_located((By.NAME, "cdConta")))
+    )
     select_vbz.select_by_value("9999999999")
     driver.execute_script("AdicionaConta();")
 
@@ -124,37 +135,31 @@ def executar(driver, **kwargs):
 
     time.sleep(1)
 
+    # Testando clicar no botão visualizar com JavaScript
     logging.info("📤 Executando Visualizar via JavaScript...")
 
     try:
-        funcao_existe = driver.execute_script("return typeof Visualizar === 'function';")
+        funcao_existe = driver.execute_script(
+            "return typeof Visualizar === 'function';"
+        )
         if not funcao_existe:
             logging.error("❌ Função Visualizar() não encontrada na página.")
-            return "skip"            
+            return "skip"
 
         driver.execute_script("return Visualizar();")
 
+        time.sleep(2)
+
+        if aceitar_alertas(driver):
+            return "skip"
+
+        aguardar_processamento()
+
     except Exception as e:
         logging.error(f"❌ Erro ao executar Visualizar(): {e}")
-        return "skip"       
-
-    try:
-        logging.info("⏳ Aguardando processamento do relatório (até 2 min)...")
-        encontrar_imagem(CSV_BTN, timeout=120)
-
-    except TimeoutError:
-        logging.warning("⚠️ Relatório demorou demais. Tentando novamente...")
-
-        try:
-            driver.execute_script("return Visualizar();")
-            encontrar_imagem(CSV_BTN, timeout=180)
-        except TimeoutError:
-            logging.error("❌ Falha crítica: relatório não foi gerado.")
-            return "skip"    
+        return "skip"
 
     logging.info("⏳ Relatório gerado! Iniciando download...")
-
-    # Clica no CSV para baixar
     time.sleep(2)
-    clicar_imagem(CSV_BTN)    
+    clicar_imagem(CSV_BTN)
     logging.info("⏳ Aguardando download...")

@@ -25,6 +25,22 @@
             "ativo": true
         },
         {
+            "codigo": "011501",
+            "params": {},
+            "destino": "C:\\Users\\Macros\\BRAPIRA COMERCIO DE BEBIDAS LTDA\\DataBeer - Documentos\\01 Cadastramentos",
+            "nome": "01.15.01.csv",
+            "descricao": "01.15.01 Preço Cheio",
+            "ativo": true
+        },
+        {
+            "codigo": "012502",
+            "params": {},
+            "destino": "C:\\Users\\Macros\\BRAPIRA COMERCIO DE BEBIDAS LTDA\\DataBeer - Documentos\\01 Cadastramentos",
+            "nome": "01.25.02.csv",
+            "descricao": "01.25.02 Preço Mínimo",
+            "ativo": true
+        },
+        {
             "codigo": "01250802",
             "params": {},
             "destino": "C:\\Users\\Macros\\BRAPIRA COMERCIO DE BEBIDAS LTDA\\DataBeer - Documentos\\01 Cadastramentos",

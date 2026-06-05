@@ -10,10 +10,11 @@ from function.abrir_rotinas import abrir_rotinas
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from function.aceitar_alertas import aceitar_alertas
 from function.data_func import primeiro_dia_ano
-from function.img_func import CSV_BTN, aguardar_processamento, clicar_imagem, encontrar_imagem
+from function.img_func import CSV_BTN, aguardar_processamento, clicar_imagem
 from function.troca_janela import trocar_para_nova_janela
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt, selecionar_selectedbox
+from function.funcoes_rotina import aguardar_tela_carregar, selecionar_selectedbox
 import time
 import pyautogui
 
@@ -23,7 +24,7 @@ CODIGO_ROTINA = "03014701"
 
 def executar(driver, **kwargs):
     """
-    Função principal da rotina.    
+    Função principal da rotina.
     """
 
     abrir_rotinas(driver, CODIGO_ROTINA)
@@ -37,7 +38,7 @@ def executar(driver, **kwargs):
     width, height = pyautogui.size()
     pyautogui.FAILSAFE = False
     pyautogui.moveTo(width / 2, height / 2)
-    pyautogui.FAILSAFE = True    
+    pyautogui.FAILSAFE = True
 
     logging.info("⚙️ Configurando parâmetros da rotina 03.01.47.01...")
 
@@ -46,48 +47,44 @@ def executar(driver, **kwargs):
     logging.info(f"Janela atual: {driver.current_window_handle}")
 
     # # parametros: wait, driver, name, value, quebra, label, CODIGO_ROTINA
-    selecionar_selectedbox(wait, driver,"quebra1", "01", "Quebra 1", "Geral", CODIGO_ROTINA)
+    selecionar_selectedbox(
+        wait, driver, "quebra1", "01", "Quebra 1", "Geral", CODIGO_ROTINA
+    )
 
     data_inicial = wait.until(EC.presence_of_element_located((By.NAME, "dataInicial")))
 
     driver.execute_script(f"arguments[0].value = '{primeiro_dia_ano()}';", data_inicial)
-    logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Data inicial configurada para {primeiro_dia_ano()}")
+    logging.info(
+        f"ROTINA {CODIGO_ROTINA}:⚙️ Data inicial configurada para {primeiro_dia_ano()}"
+    )
 
     time.sleep(2)
 
+    # Testando clicar no botão visualizar com JavaScript
     logging.info("📤 Executando Visualizar via JavaScript...")
 
     try:
-        funcao_existe = driver.execute_script("return typeof Visualizar === 'function';")
+        funcao_existe = driver.execute_script(
+            "return typeof Visualizar === 'function';"
+        )
         if not funcao_existe:
             logging.error("❌ Função Visualizar() não encontrada na página.")
-            return "skip"            
-
-        driver.execute_script("return Visualizar();")
-        
-        aguardar_processamento()        
-            
-    except Exception as e:
-            logging.error(f"❌ Erro ao executar Visualizar(): {e}")
-            return "skip"       
-
-    try:
-        logging.info("⏳ Aguardando processamento do relatório (até 2 min)...")
-        encontrar_imagem(CSV_BTN, timeout=120)
-
-    except TimeoutError:
-        logging.warning("⚠️ Relatório demorou demais. Tentando novamente...")
-
-        try:
-            driver.execute_script("return Visualizar();")
-            encontrar_imagem(CSV_BTN, timeout=180)
-        except TimeoutError:
-            logging.error("❌ Falha crítica: relatório não foi gerado.")
             return "skip"
 
+        driver.execute_script("return Visualizar();")
+
+        time.sleep(2)
+
+        if aceitar_alertas(driver):
+            return "skip"
+
+        aguardar_processamento()
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
+        return "skip"
+
     logging.info("⏳ Relatório gerado! Iniciando download...")
-    
-    # Clica no CSV para baixar
     time.sleep(2)
     clicar_imagem(CSV_BTN)
     logging.info("⏳ Aguardando download...")

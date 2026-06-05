@@ -9,8 +9,8 @@ from function.abrir_rotinas import abrir_rotinas
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt
-from function.img_func import VISUALIZAR_BTN, encontrar_imagem, clicar_imagem, CSV_BTN
+from function.funcoes_rotina import aguardar_tela_carregar
+from function.img_func import clicar_imagem, encontrar_imagem, CSV_BTN
 from function.troca_janela import trocar_para_nova_janela
 import time
 import pyautogui
@@ -97,33 +97,7 @@ def executar(driver, **kwargs):
             logging.error("❌ Falha crítica: relatório não foi gerado.")
             return "skip"
 
-    # # Exporta o CSV
-    # logging.info("📤 Tentando usar o atalho Alt+V para visualizar...")
-    # atalho_alt("v")
-    # time.sleep(5)
-
-    # # Verifica se o botão do CSV aparece (sucesso do Alt+V)
-    # # Se não aparecer em 300s (5 min), assume falha e tenta clicar no visualizar manualmente
-    # try:
-    #     # Tenta encontrar o botão CSV que indica que o relatório carregou
-    #     logging.info("⏳ Aguardando processamento do relatório (Até 2 min)...")
-    #     encontrar_imagem(CSV_BTN, timeout=120) 
-    # except TimeoutError:
-    #     logging.error("❌ Atalho Alt+V falhou ou demorou demais. Tentando clicar em Visualizar manualmente...")
-    #     clicar_imagem(VISUALIZAR_BTN, timeout=10) # Tenta clicar no botão visualizar
-        
-    #     # Espera novamente pelo resultado
-    #     logging.info("⏳ Aguardando processamento (2ª tentativa)...")
-    #     try:
-    #         encontrar_imagem(CSV_BTN, timeout=300)
-    #     except TimeoutError:
-    #         logging.error("❌ Falha crítica: Relatório não carregou.")
-    #         return
-
     logging.info("⏳ Relatório gerado! Iniciando download...")
-
-    # Clica no CSV para baixar
     time.sleep(2)
     clicar_imagem(CSV_BTN)
-
     logging.info("⏳ Aguardando download...")

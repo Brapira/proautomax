@@ -10,8 +10,8 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from function.aceitar_alertas import aceitar_alertas
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt
-from function.img_func import VISUALIZAR_BTN, aguardar_processamento, encontrar_imagem, clicar_imagem, CSV_BTN
+from function.funcoes_rotina import aguardar_tela_carregar
+from function.img_func import CSV_BTN, aguardar_processamento, clicar_imagem
 from function.troca_janela import trocar_para_nova_janela
 import time
 import pyautogui
@@ -23,7 +23,7 @@ CODIGO_ROTINA = "020253"
 
 def executar(driver, **kwargs):
     """
-    Função principal da rotina.    
+    Função principal da rotina.
     """
 
     abrir_rotinas(driver, CODIGO_ROTINA)
@@ -38,7 +38,6 @@ def executar(driver, **kwargs):
     pyautogui.FAILSAFE = False
     pyautogui.moveTo(width / 2, height / 2)
     pyautogui.FAILSAFE = True
-    
 
     logging.info("⚙️ Configurando parâmetros da rotina 02.02.53...")
 
@@ -48,55 +47,46 @@ def executar(driver, **kwargs):
 
     combo = driver.find_element("name", "idClassificacao")
 
-    driver.execute_script("""
+    driver.execute_script(
+        """
         var select = arguments[0];
         select.value = "2";
         if (select.onchange) {
             select.onchange();
         }
-    """, combo)
+    """,
+        combo,
+    )
 
     logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Quebra 1 configurada para Numérica")
-    
+
     time.sleep(2)
 
     # Testando clicar no botão visualizar com JavaScript
     logging.info("📤 Executando Visualizar via JavaScript...")
 
     try:
-        funcao_existe = driver.execute_script("return typeof Visualizar === 'function';")
+        funcao_existe = driver.execute_script(
+            "return typeof Visualizar === 'function';"
+        )
         if not funcao_existe:
             logging.error("❌ Função Visualizar() não encontrada na página.")
-            return "skip"            
-
-        driver.execute_script("return Visualizar();")
-        
-        if aceitar_alertas(driver):
-            return "skip" 
-        
-        aguardar_processamento()
-        
-    except Exception as e:
-        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
-        return "skip"       
-
-    try:
-        logging.info("⏳ Aguardando processamento do relatório (até 2 min)...")
-        encontrar_imagem(CSV_BTN, timeout=120)
-
-    except TimeoutError:
-        logging.warning("⚠️ Relatório demorou demais. Tentando novamente...")
-
-        try:
-            driver.execute_script("return Visualizar();")
-            encontrar_imagem(CSV_BTN, timeout=180)
-        except TimeoutError:
-            logging.error("❌ Falha crítica: relatório não foi gerado.")
             return "skip"
 
-    logging.info("⏳ Relatório gerado! Iniciando download...")
+        driver.execute_script("return Visualizar();")
 
-    # Clica no CSV para baixar
+        time.sleep(2)
+
+        if aceitar_alertas(driver):
+            return "skip"
+
+        aguardar_processamento()
+
+    except Exception as e:
+        logging.error(f"❌ Erro ao executar Visualizar(): {e}")
+        return "skip"
+
+    logging.info("⏳ Relatório gerado! Iniciando download...")
     time.sleep(2)
     clicar_imagem(CSV_BTN)
     logging.info("⏳ Aguardando download...")

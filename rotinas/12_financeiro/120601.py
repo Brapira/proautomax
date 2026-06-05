@@ -10,8 +10,9 @@ from function.abrir_rotinas import abrir_rotinas
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from function.funcoes_rotina import aguardar_tela_carregar, atalho_alt
-from function.img_func import encontrar_imagem, clicar_imagem, CSV_BTN, VISUALIZAR_BTN
+from function.aceitar_alertas import aceitar_alertas
+from function.funcoes_rotina import aguardar_tela_carregar
+from function.img_func import CSV_BTN, aguardar_processamento, clicar_imagem
 from function.troca_janela import trocar_para_nova_janela
 import time
 import pyautogui
@@ -38,7 +39,6 @@ def executar(driver, **kwargs):
     pyautogui.FAILSAFE = False
     pyautogui.moveTo(width / 2, height / 2)
     pyautogui.FAILSAFE = True
-    
 
     logging.info("⚙️ Configurando parâmetros da rotina 12.06.01...")
 
@@ -48,49 +48,51 @@ def executar(driver, **kwargs):
 
     select_quebra1 = wait.until(EC.presence_of_element_located((By.NAME, "opcaoRel")))
 
-    driver.execute_script("arguments[0].value = '01'; arguments[0].onchange();", select_quebra1)
+    driver.execute_script(
+        "arguments[0].value = '01'; arguments[0].onchange();", select_quebra1
+    )
 
-    logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Quebra 1 configurada para classificação numérica")
+    logging.info(
+        f"ROTINA {CODIGO_ROTINA}:⚙️ Quebra 1 configurada para classificação numérica"
+    )
     time.sleep(0.5)
 
-    vencimento_final = wait.until(EC.presence_of_element_located((By.NAME, "fimVencimento")))
+    vencimento_final = wait.until(
+        EC.presence_of_element_located((By.NAME, "fimVencimento"))
+    )
 
     driver.execute_script(f"arguments[0].value = '{data_ontem()}';", vencimento_final)
-    logging.info(f"ROTINA {CODIGO_ROTINA}:⚙️ Data inicial configurada para {data_ontem()}")
-    
+    logging.info(
+        f"ROTINA {CODIGO_ROTINA}:⚙️ Data inicial configurada para {data_ontem()}"
+    )
+
     time.sleep(2)
 
+    # Testando clicar no botão visualizar com JavaScript
     logging.info("📤 Executando Visualizar via JavaScript...")
 
     try:
-        funcao_existe = driver.execute_script("return typeof Visualizar === 'function';")
+        funcao_existe = driver.execute_script(
+            "return typeof Visualizar === 'function';"
+        )
         if not funcao_existe:
             logging.error("❌ Função Visualizar() não encontrada na página.")
-            return "skip"            
+            return "skip"
 
         driver.execute_script("return Visualizar();")
 
+        time.sleep(2)
+
+        if aceitar_alertas(driver):
+            return "skip"
+
+        aguardar_processamento()
+
     except Exception as e:
         logging.error(f"❌ Erro ao executar Visualizar(): {e}")
-        return "skip"       
-
-    try:
-        logging.info("⏳ Aguardando processamento do relatório (até 2 min)...")
-        encontrar_imagem(CSV_BTN, timeout=120)
-
-    except TimeoutError:
-        logging.warning("⚠️ Relatório demorou demais. Tentando novamente...")
-
-        try:
-            driver.execute_script("return Visualizar();")
-            encontrar_imagem(CSV_BTN, timeout=180)
-        except TimeoutError:
-            logging.error("❌ Falha crítica: relatório não foi gerado.")
-            return "skip"   
+        return "skip"
 
     logging.info("⏳ Relatório gerado! Iniciando download...")
-
-    # Clica no CSV para baixar
     time.sleep(2)
     clicar_imagem(CSV_BTN)
     logging.info("⏳ Aguardando download...")
