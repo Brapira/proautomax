@@ -139,6 +139,14 @@
             "ativo": false
         },
         {
+            "codigo": "031120",
+            "params": {},
+            "destino": "${DATABEER_BASE}\\03 Movimentacao Diaria",
+            "nome": "03.11.20.csv",
+            "descricao": "03.11.20 - Rel. Remuneração de Transportadora",
+            "ativo": true
+        },
+        {
             "codigo": "0421",
             "params": {},
             "destino": "${DATABEER_BASE}\\04 Livros Fiscais",
@@ -162,7 +170,7 @@
             "destino": "${DATABEER_BASE}\\12 Financeiro",
             "nome": "12.06.01.csv",
             "descricao": "12.06.01 - Rel. Títulos Pendentes",
-            "ativo": true
+            "ativo": false
         },
         {
             "codigo": "120601_SEMDATA",
@@ -170,7 +178,7 @@
             "destino": "${DATABEER_BASE}\\12 Financeiro",
             "nome": "12.06.01_semData.csv",
             "descricao": "12.06.01 - Rel. Títulos Pendentes (sem filtro de data)",
-            "ativo": true
+            "ativo": false
         },
         {
             "codigo": "150501",
