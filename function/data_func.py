@@ -40,4 +40,8 @@ def gerar_nome_mes_vigente():
     return f"{hoje.month:02d}.{MESES[hoje.month]}"
 
 def ano_vigente():
-   return datetime.today().strftime("%Y") 
+    return datetime.today().strftime("%Y")
+
+def data_ontem_nome():
+    ontem = hoje - timedelta(days=1)
+    return ontem.strftime('%d.%m.%y')

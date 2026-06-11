@@ -131,6 +131,15 @@
             "ativo": false
         },
         {
+            "codigo": "030805",
+            "params": {},
+            "destino": "${DATABEER_BASE}\\03 Movimentacao Diaria\\03.08.05",
+            "nome": "030805_{DATA_ONTEM}.csv",
+            "extensao_download": ".txt",
+            "descricao": "03.08.05 - Conferência de Frete",
+            "ativo": true
+        },
+        {
             "codigo": "030509",
             "params": {},
             "destino": "${DATABEER_BASE}\\03 Movimentacao Diaria",
@@ -144,7 +153,7 @@
             "destino": "${DATABEER_BASE}\\03 Movimentacao Diaria",
             "nome": "03.11.20.csv",
             "descricao": "03.11.20 - Rel. Remuneração de Transportadora",
-            "ativo": true
+            "ativo": false
         },
         {
             "codigo": "0421",

@@ -35,8 +35,8 @@ def confirmar_download():
     time.sleep(0.5)
     logging.info("💾 Opção 'Salvar como' acionada!")
 
-def aguardar_novo_arquivo(timeout=120):
-    logging.info(f"⏳ Aguardando arquivo INF...")
+def aguardar_novo_arquivo(timeout=120, extensao=".csv"):
+    logging.info(f"⏳ Aguardando arquivo {extensao.upper()}...")
     logging.info(f"📂 Monitorando: {PASTA_DOWNLOADS}")
 
     inicio = time.time()
@@ -46,7 +46,7 @@ def aguardar_novo_arquivo(timeout=120):
         try:
             arquivos = [
                 f for f in os.listdir(PASTA_DOWNLOADS)
-                if f.lower().endswith(".inf")
+                if f.lower().endswith(extensao.lower())
                 and not f.endswith((".crdownload", ".tmp", ".partial"))
                 and os.path.isfile(os.path.join(PASTA_DOWNLOADS, f))
             ]
@@ -75,7 +75,7 @@ def aguardar_novo_arquivo(timeout=120):
 
         time.sleep(1)
 
-    raise TimeoutError(f"Nenhum arquivo INF apareceu após {timeout}s")
+    raise TimeoutError(f"Nenhum arquivo {extensao.upper()} apareceu após {timeout}s")
 
 
 
@@ -171,28 +171,31 @@ def mover_arquivo_com_retry(origem, destino, max_tentativas=5):
     return False
 
 
-def salvar_arquivo(destino, nome_arquivo):
+def salvar_arquivo(destino, nome_arquivo, extensao_download=None):
     """
     Fluxo completo de salvamento.
-    
+
     Args:
         destino: Pasta de destino final
         nome_arquivo: Nome final do arquivo (ex: "0111.csv")
-    
+        extensao_download: Extensão do arquivo em Downloads quando diferente do nome final
+                           (ex: baixa .txt mas salva como .csv)
+
     Returns:
         Caminho completo do arquivo salvo
-    
+
     Raises:
         Exception: Se não conseguir salvar o arquivo
     """
     logging.info("💾 Iniciando salvamento...")
-    
+
     # 1. Confirma o download (Tab 3x + Enter)
     confirmar_download()
-    
+
     # 2. Aguarda o arquivo aparecer
+    extensao = extensao_download or Path(nome_arquivo).suffix.lower() or ".csv"
     try:
-        arquivo_baixado = aguardar_novo_arquivo(timeout=120)
+        arquivo_baixado = aguardar_novo_arquivo(timeout=120, extensao=extensao)
     except TimeoutError as e:
         logging.error(f"❌ {e}")
         raise Exception("Timeout: arquivo não foi baixado")

@@ -16,7 +16,7 @@ import traceback
 
 import pyautogui
 from function.download import salvar_arquivo
-from function.data_func import ano_vigente, gerar_nome_mes_vigente
+from function.data_func import ano_vigente, gerar_nome_mes_vigente, data_ontem_nome
 from function.ai_vision import diagnosticar_e_decidir, relatorio_uso_tokens
 from function.teams_notify import notificar_inicio, notificar_fim, notificar_erro_critico
 
@@ -90,6 +90,9 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
         else:
             nome = item.get("nome", f"{codigo}.csv")
 
+        if "{DATA_ONTEM}" in nome:
+            nome = nome.replace("{DATA_ONTEM}", data_ontem_nome())
+
         destino  = _resolver_caminho(item["destino"])
         descricao = item.get("descricao", codigo)
 
@@ -113,7 +116,8 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
                 continue
 
             # 2. Salva o arquivo
-            arquivo_final = salvar_arquivo(destino, nome)
+            extensao_download = item.get("extensao_download")
+            arquivo_final = salvar_arquivo(destino, nome, extensao_download=extensao_download)
             logging.info(f"✓ Concluído: {arquivo_final}\n")
             rotinas_salvas.append(codigo)
 
