@@ -25,12 +25,20 @@
             "ativo": false
         },
         {
+            "codigo": "012502",
+            "params": {},
+            "destino": "${DATABEER_BASE}\\01 Cadastramentos",
+            "nome": "01.25.02.csv",
+            "descricao": "01.25.02 Preço Mínimo",
+            "ativo": true
+        },
+        {
             "codigo": "011501",
             "params": {},
             "destino": "${DATABEER_BASE}\\01 Cadastramentos",
             "nome": "01.15.01.csv",
             "descricao": "01.15.01 Preço Cheio",
-            "ativo": true
+            "ativo": false
         },
         {
             "codigo": "01250802",
