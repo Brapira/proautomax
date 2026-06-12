@@ -25,6 +25,14 @@
             "ativo": false
         },
         {
+            "codigo": "011501",
+            "params": {},
+            "destino": "${DATABEER_BASE}\\01 Cadastramentos",
+            "nome": "01.15.01.csv",
+            "descricao": "01.15.01 Preço Cheio",
+            "ativo": true
+        },
+        {
             "codigo": "01250802",
             "params": {},
             "destino": "${DATABEER_BASE}\\01 Cadastramentos",
@@ -155,7 +163,7 @@
             "destino": "${DATABEER_BASE}\\03 Movimentacao Diaria\\030509\\2026",
             "nome": "03.05.09.csv",
             "descricao": "03.05.09 - Rel. Preço médio",
-            "ativo": true
+            "ativo": false
         },
         {
             "codigo": "031120",
