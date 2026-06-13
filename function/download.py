@@ -30,7 +30,7 @@ def confirmar_download():
     logging.info("🎯 Continuando execução...")
 
 
-def aguardar_novo_arquivo(timeout=120, extensao=".csv"):
+def aguardar_novo_arquivo(timeout=120, extensao=".inf"):
     logging.info(f"⏳ Aguardando arquivo {extensao.upper()}...")
     logging.info(f"📂 Monitorando: {PASTA_DOWNLOADS}")
 
