@@ -7,7 +7,6 @@ import logging
 import os
 import time
 import shutil
-from pathlib import Path
 from pywinauto.keyboard import send_keys
 from dotenv import load_dotenv
 from function.ai_vision import clicar_elemento_ia
@@ -106,11 +105,11 @@ def _arquivo_esta_pronto(caminho, tempo_estabilidade=2.0):
                 elif (time.time() - start_stable) >= tempo_estabilidade:
                     # Tamanho estável pelo tempo necessário. Tenta abrir.
                     try:
-                        with open(caminho, 'r+b') as f:
+                        with open(caminho, 'rb'):
                             return True
                     except (OSError, PermissionError):
-                        # Arquivo bloqueado, reseta estabilidade
-                        start_stable = None 
+                        # Arquivo bloqueado (ex: Windows processando .inf), reseta estabilidade
+                        start_stable = None
             else:
                 # Tamanho mudou ou é 0, reseta contagem
                 last_size = current_size
@@ -188,7 +187,9 @@ def salvar_arquivo(destino, nome_arquivo, extensao_download=None):
     confirmar_download()
 
     # 2. Aguarda o arquivo aparecer
-    extensao = extensao_download or Path(nome_arquivo).suffix.lower() or ".csv"
+    # extensao_download: override explícito (ex: .txt para 030805)
+    # default .inf: o Promax sempre baixa .inf; o nome final (nome_arquivo) só renomeia ao mover
+    extensao = extensao_download or ".inf"
     try:
         arquivo_baixado = aguardar_novo_arquivo(timeout=120, extensao=extensao)
     except TimeoutError as e:
