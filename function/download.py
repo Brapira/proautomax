@@ -29,11 +29,6 @@ def confirmar_download():
 
     logging.info("🎯 Continuando execução...")
 
-    # Confirma o Salvar como
-    time.sleep(0.5)
-    send_keys("{ENTER}")
-    time.sleep(0.5)
-    logging.info("💾 Opção 'Salvar como' acionada!")
 
 def aguardar_novo_arquivo(timeout=120, extensao=".csv"):
     logging.info(f"⏳ Aguardando arquivo {extensao.upper()}...")
