@@ -111,7 +111,7 @@
             "params": {
                 "nomeMes": "MES_ATUAL"
             },
-            "destino": "${DATABEER_BASE}\\03 Movimentacao Diaria\\03013604",
+            "destino": "${DATABEER_BASE}\\03 Movimentacao Diaria\\2026\\03013604",
             "nome": "03.01.36.04.csv",
             "descricao": "03.01.36.04 - Rel. Pedidos do dia em CAIXA acumulado do mês",
             "ativo": false
