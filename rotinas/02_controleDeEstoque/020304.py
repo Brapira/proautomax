@@ -84,14 +84,10 @@ def executar(driver, **kwargs):
 )
 
         if analise.get("estado") in (ESTADOS["SEM_DADOS"], ESTADOS["ERRO"]):
-            logging.warning(f"⚠️ Relatório processado com estado: {analise.get('estado')}. Solicitando click pela IA.")
+            logging.warning(f"⚠️ Sem dados para {data_ontem()} — fechando dialog e pulando.")
+            clicar_elemento_ia(**CLICAR_BOTAO_VISUALIZAR)  # fecha o dialog OK que está na tela
+            return "skip"
 
-           
-            if not clicar_elemento_ia(**CLICAR_BOTAO_VISUALIZAR):
-                logging.error("❌ Falha ao clicar no botão Visualizar via IA.")
-                return "skip"
-            
-        
     except TimeoutError:
         logging.warning(f"⏳ Tempo esgotado aguardando processamento do relatório na rotina {CODIGO_ROTINA}. Pulando...")
         

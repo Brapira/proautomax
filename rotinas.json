@@ -148,7 +148,7 @@
         },
         {
             "codigo": "030805",
-            "params": {},
+            "params": { "pularDomingo": true },
             "destino": "${DATABEER_BASE}\\03 Movimentacao Diaria\\03.08.05",
             "nome": "030805_{DATA_ONTEM}.csv",
             "extensao_download": ".txt",

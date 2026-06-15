@@ -5,6 +5,7 @@ Autor: Carol
 """
 
 import logging
+import time
 import pyautogui
 from function.abrir_rotinas import abrir_rotinas
 from selenium.webdriver.common.by import By
@@ -14,12 +15,13 @@ from function.data_func import primeiro_dia_mes
 from function.funcoes_rotina import aguardar_tela_carregar
 from function.ai_vision import ESTADOS, aguardar_estado_ia, clicar_elemento_ia, focar_janela_promax
 from function.acoes import AGUARDAR_CSV_PESADO, CLICAR_CSV
+from function.download import salvar_arquivo as _salvar_arquivo
 from function.troca_janela import trocar_para_nova_janela
 
 CODIGO_ROTINA = "03013604_MES"
 
 
-def executar(driver, **kwargs):
+def executar(driver, _destino=None, _nome=None, _extensao_download=None, **kwargs):
 
     focar_janela_promax()
     abrir_rotinas(driver, '03013604')
@@ -75,5 +77,28 @@ def executar(driver, **kwargs):
     if not clicar_elemento_ia(**CLICAR_CSV):
         logging.error("❌ Falha ao clicar no CSV")
         return "skip"
+
+    # Retry automático: o Promax às vezes deleta o arquivo temp antes do Edge terminar de baixar.
+    # Clicar no CSV novamente força o Promax a gerar um novo arquivo temp.
+    if _destino and _nome:
+        logging.info("⏳ Aguardando download (1ª tentativa)...")
+        try:
+            _salvar_arquivo(_destino, _nome, extensao_download=_extensao_download)
+            return "salvo"
+        except Exception as e:
+            logging.warning(f"⚠️ 1ª tentativa falhou: {e}. Clicando CSV novamente...")
+
+        time.sleep(3)
+        if not clicar_elemento_ia(**CLICAR_CSV):
+            logging.error("❌ Falha ao re-clicar CSV no retry")
+            return "skip"
+
+        logging.info("⏳ Aguardando download (2ª tentativa)...")
+        try:
+            _salvar_arquivo(_destino, _nome, extensao_download=_extensao_download)
+            return "salvo"
+        except Exception as e:
+            logging.error(f"❌ Download falhou após retry: {e}")
+            return "skip"
 
     logging.info("⏳ Aguardando download...")

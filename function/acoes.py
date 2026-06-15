@@ -33,6 +33,7 @@ AGUARDAR_CSV = {
     "pergunta": (
         "O relatório já foi gerado no Promax? "
         "Procure um botão pequeno com o texto 'CSV' na barra de ferramentas do relatório. "
+        "Se o botão 'CSV' estiver visível e clicável na barra de ferramentas, informe OBRIGATORIAMENTE 'csv_disponivel' — mesmo que o relatório já esteja exibindo dados. "
         "Se não houver dados ou aparecer uma mensagem de 'sem registros', informe 'sem_dados'. "
         "Se houver um popup/dialog aberto, informe 'alerta'."
     ),
@@ -46,6 +47,7 @@ AGUARDAR_CSV_PESADO = {
     "pergunta": (
         "O relatório já foi gerado no Promax? "
         "Procure um botão pequeno com o texto 'CSV' na barra de ferramentas do relatório. "
+        "Se o botão 'CSV' estiver visível e clicável na barra de ferramentas, informe OBRIGATORIAMENTE 'csv_disponivel' — mesmo que o relatório já esteja exibindo dados. "
         "Se não houver dados ou aparecer uma mensagem de 'sem registros', informe 'sem_dados'. "
         "Se houver um popup/dialog aberto, informe 'alerta'."
     ),
@@ -67,14 +69,18 @@ AGUARDAR_DOWNLOAD_SALVAR = {
 AGUARDAR_SALVAR_BOTAO_PAGINA = {
     # Aguarda botão "Salvar" dentro da própria página (rotina 0421 e 01250802)
     # É diferente da barra de download — fica no corpo da tela como botão de formulário
-    "estados_esperados": ["download_salvar", "csv_disponivel", "erro"],
+    # "pronto" incluído: a IA retorna esse estado quando vê o relatório carregado com
+    # o botão Salvar visível no toolbar, o que é exatamente o sinal que precisamos
+    "estados_esperados": ["pronto", "download_salvar", "csv_disponivel", "erro"],
     "timeout": 180,
     "intervalo": 4,
     "pergunta": (
-        "Apareceu um botão 'Salvar' na tela? "
-        "Pode ser: (1) um botão 'Salvar' simples dentro da página do relatório, "
-        "ou (2) a barra de download do Edge na parte inferior com botão 'Salvar'. "
-        "Informe qual dos dois é visível e as coordenadas do botão."
+        "O relatório foi gerado e o botão 'Salvar' está visível na barra de ferramentas da página? "
+        "Procure um botão 'Salvar' cinza com texto preto no toolbar do relatório Promax "
+        "(ao lado do botão 'CSV', que pode estar desabilitado). "
+        "Se o relatório estiver carregado e o botão visível, informe 'pronto'. "
+        "Se houver um popup/dialog aberto, informe 'alerta'. "
+        "Se não houver dados, informe 'sem_dados'."
     ),
 }
 

@@ -13,6 +13,7 @@ import os
 import re
 import time
 import traceback
+from datetime import date, timedelta
 
 import pyautogui
 from function.download import salvar_arquivo
@@ -83,6 +84,12 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
 
         # Resolve o nome do arquivo de destino
         params = item.get("params", {})
+        pular_domingo = params.pop("pularDomingo", False)
+        if pular_domingo and (date.today() - timedelta(days=1)).weekday() == 6:
+            logging.info(f"⏭️  [{idx}/{total}] '{codigo}' pulada — ontem foi domingo (pularDomingo=true)")
+            rotinas_ignoradas.append(codigo)
+            continue
+
         if params.get("nomeMes") == "MES_ATUAL":
             nome = f"{gerar_nome_mes_vigente()}.csv"
         elif params.get("anoVigente") == "ANO_VIGENTE":
@@ -94,6 +101,7 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
             nome = nome.replace("{DATA_ONTEM}", data_ontem_nome())
 
         destino  = _resolver_caminho(item["destino"])
+        extensao_download = item.get("extensao_download")
         descricao = item.get("descricao", codigo)
 
         logging.info("=" * 60)
@@ -106,7 +114,20 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
         try:
             # 1. Executa a rotina (navega e gera o relatório)
             logging.info("📤 Executando rotina...")
-            resultado = rotinas_registradas[codigo](driver, **params)
+            resultado = rotinas_registradas[codigo](
+                driver,
+                _destino=destino,
+                _nome=nome,
+                _extensao_download=extensao_download,
+                **params,
+            )
+
+            # Rotina salvou o arquivo ela mesma (ex: com retry próprio)
+            if resultado == "salvo":
+                logging.info(f"✓ Concluído (salvo pela rotina)\n")
+                rotinas_salvas.append(codigo)
+                _fechar_e_voltar(driver, promaxPrimeiraJanela)
+                continue
 
             # Rotina sinalizou para pular (sem dados, erro esperado, etc.)
             if resultado == "skip":
@@ -116,7 +137,6 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
                 continue
 
             # 2. Salva o arquivo
-            extensao_download = item.get("extensao_download")
             arquivo_final = salvar_arquivo(destino, nome, extensao_download=extensao_download)
             logging.info(f"✓ Concluído: {arquivo_final}\n")
             rotinas_salvas.append(codigo)
