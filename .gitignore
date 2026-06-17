@@ -7,4 +7,5 @@ __pycache__/
 .function/downloads._strategies.py
 logs/
 agente/.env
+agente/iniciar_agente.bat
 timeout*.png
