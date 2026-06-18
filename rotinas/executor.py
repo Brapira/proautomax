@@ -205,6 +205,10 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
 def _fechar_e_voltar(driver, janela_principal):
     """Fecha a janela atual e volta para a janela principal do Promax."""
     try:
+        try:
+            driver.switch_to.alert.accept()
+        except Exception:
+            pass
         if driver.current_window_handle != janela_principal:
             driver.close()
             driver.switch_to.window(janela_principal)

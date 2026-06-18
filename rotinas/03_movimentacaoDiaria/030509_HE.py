@@ -36,15 +36,16 @@ def executar(driver, **kwargs):
     logging.info("⚙️ Configurando parâmetros da rotina 03.05.09 em hectolitro...")
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.NAME, "rotina")))
 
-    select_quebra1 = wait.until(EC.presence_of_element_located((By.NAME, "opcaoRel")))
-    driver.execute_script("arguments[0].value = '07'; arguments[0].onchange();", select_quebra1)
+    wait.until(EC.presence_of_element_located((By.NAME, "opcaoRel")))
+    driver.execute_script("document.all.opcaoRel.value = '07'; if(document.all.opcaoRel.onchange) document.all.opcaoRel.onchange();")
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Quebra 1 configurada para classificação Cliente (07)")
 
-    radio_hecto = wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='radio'][name='fatorConversao'][value='H']"))
-    )
-    if not radio_hecto.is_selected():
-        radio_hecto.click()
+    driver.execute_script("""
+        var radios = document.getElementsByName('fatorConversao');
+        for (var i = 0; i < radios.length; i++) {
+            if (radios[i].value === 'H') { radios[i].click(); break; }
+        }
+    """)
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Fator de conversão configurado para Hectolitro")
 
     logging.info("📤 Executando Visualizar via JavaScript...")

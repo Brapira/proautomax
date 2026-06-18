@@ -36,11 +36,13 @@ def executar(driver, **kwargs):
     logging.info("⚙️ Configurando parâmetros da rotina 03.01.36.04 em hectolitro...")
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.NAME, "rotina")))
 
-    checkbox = wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='checkbox'][name='idQtdeHecto'][value='S']"))
-    )
-    if not checkbox.is_selected():
-        driver.execute_script("arguments[0].click();", checkbox)
+    wait.until(EC.presence_of_element_located((By.NAME, "idQtdeHecto")))
+    driver.execute_script("""
+        var cbs = document.getElementsByName('idQtdeHecto');
+        for (var i = 0; i < cbs.length; i++) {
+            if (cbs[i].value === 'S' && !cbs[i].checked) { cbs[i].click(); break; }
+        }
+    """)
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Checkbox de hectolitro selecionada")
 
     logging.info("📤 Executando Visualizar via JavaScript...")

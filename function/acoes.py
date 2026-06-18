@@ -27,7 +27,7 @@ ESTRUTURA DE CADA AÇÃO:
 
 AGUARDAR_CSV = {
     # Maioria das rotinas: aguarda o botão CSV aparecer no toolbar do relatório
-    "estados_esperados": ["csv_disponivel", "sem_dados", "alerta", "erro"],
+    "estados_esperados": ["csv_disponivel", "sem_dados", "erro"],
     "timeout": 300,
     "intervalo": 4,
     "pergunta": (
@@ -41,7 +41,7 @@ AGUARDAR_CSV = {
 
 AGUARDAR_CSV_PESADO = {
     # Relatórios lentos (020304, 03013604_MES, 030237): timeout maior, intervalo maior = menos chamadas = menos custo
-    "estados_esperados": ["csv_disponivel", "sem_dados", "alerta", "erro"],
+    "estados_esperados": ["csv_disponivel", "sem_dados", "erro"],
     "timeout": 600,
     "intervalo": 8,
     "pergunta": (

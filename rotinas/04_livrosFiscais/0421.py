@@ -36,43 +36,35 @@ def executar(driver, **kwargs):
     logging.info("⚙️ Configurando parâmetros da rotina 04.21...")
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.NAME, "rotina")))
 
+    # Aguarda a página carregar dentro do frame
+    wait.until(EC.presence_of_element_located((By.NAME, "opcaoCusto")))
+
     # Opção de custo = Preço médio de reposição (3)
-    combo = driver.find_element("name", "opcaoCusto")
     driver.execute_script("""
-        var select = arguments[0];
-        select.value = "3";
-        if (select.onchange) { select.onchange(); }
-    """, combo)
+        var el = document.getElementsByName('opcaoCusto')[0];
+        if (el) { el.value = '3'; if (el.onchange) el.onchange(); }
+    """)
     logging.info("⚙️ Selecionando opção de preço médio de reposição...")
 
     # Remove flag Vasilhame
-    checkbox_vasilhame = driver.find_element("name", "checkVasilhame")
     driver.execute_script("""
-        var cb = arguments[0];
-        cb.checked = false;
-        if (cb.onclick) cb.onclick();
-        if (cb.onchange) cb.onchange();
-    """, checkbox_vasilhame)
+        var cb = document.getElementsByName('checkVasilhame')[0];
+        if (cb) { cb.checked = false; if (cb.onclick) cb.onclick(); if (cb.onchange) cb.onchange(); }
+    """)
     logging.info("⚙️ Removendo flag de Vasilhame...")
 
     # Remove flag Garrafeira
-    checkbox_garrafeira = driver.find_element("name", "checkGarrafeira")
     driver.execute_script("""
-        var cb = arguments[0];
-        cb.checked = false;
-        if (cb.onclick) cb.onclick();
-        if (cb.onchange) cb.onchange();
-    """, checkbox_garrafeira)
+        var cb = document.getElementsByName('checkGarrafeira')[0];
+        if (cb) { cb.checked = false; if (cb.onclick) cb.onclick(); if (cb.onchange) cb.onchange(); }
+    """)
     logging.info("⚙️ Removendo flag de Garrafeira...")
 
     # Remove flag Material
-    checkbox_material = driver.find_element("name", "checkMaterial")
     driver.execute_script("""
-        var cb = arguments[0];
-        cb.checked = false;
-        if (cb.onclick) cb.onclick();
-        if (cb.onchange) cb.onchange();
-    """, checkbox_material)
+        var cb = document.getElementsByName('checkMaterial')[0];
+        if (cb) { cb.checked = false; if (cb.onclick) cb.onclick(); if (cb.onchange) cb.onchange(); }
+    """)
     logging.info("⚙️ Removendo flag de Material...")
 
     # Depósito 01 Central

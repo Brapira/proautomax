@@ -44,7 +44,7 @@ def executar(driver, **kwargs):
 
     # ── 3. Configura os parâmetros da tela ────────────────────────────────────
     select_classificacao = wait.until(EC.presence_of_element_located((By.NAME, "opcaoRel")))
-    driver.execute_script("arguments[0].value = '1'; arguments[0].onchange();", select_classificacao)
+    driver.execute_script("arguments[0].value = '1'; if(arguments[0].onchange) arguments[0].onchange();", select_classificacao)
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Classificação configurada para Mapa")
 
     data_inicial = wait.until(EC.presence_of_element_located((By.NAME, "dataInicial")))
