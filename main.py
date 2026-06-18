@@ -1,4 +1,6 @@
 from datetime import datetime
+import subprocess
+import time
 import pygetwindow as gw
 import logging
 from selenium import webdriver
@@ -63,8 +65,26 @@ ie_options.ensure_clean_session = True
 ie_options.ignore_protected_mode_settings = True
 ie_options.initial_browser_url = "https://brapira.promaxcloud.com.br"
 
-service = webdriver.IeService(executable_path=r".\drivers\IEDriverServer.exe")
-driver  = webdriver.Ie(service=service, options=ie_options)
+logging.info("🧹 Limpando processos antigos do driver...")
+subprocess.run(["taskkill", "/f", "/im", "IEDriverServer.exe"], capture_output=True)
+subprocess.run(["taskkill", "/f", "/im", "msedge.exe"], capture_output=True)
+time.sleep(3)
+
+driver = None
+for tentativa in range(1, 4):
+    try:
+        service = webdriver.IeService(executable_path=r".\drivers\IEDriverServer.exe")
+        driver  = webdriver.Ie(service=service, options=ie_options)
+        logging.info("✅ Driver iniciado com sucesso")
+        break
+    except Exception as e:
+        logging.warning(f"⚠️ Tentativa {tentativa}/3 falhou ao iniciar driver: {e}")
+        subprocess.run(["taskkill", "/f", "/im", "IEDriverServer.exe"], capture_output=True)
+        subprocess.run(["taskkill", "/f", "/im", "msedge.exe"], capture_output=True)
+        if tentativa < 3:
+            time.sleep(5)
+        else:
+            raise RuntimeError("Não foi possível iniciar o IEDriverServer após 3 tentativas") from e
 
 driver.maximize_window()
 
