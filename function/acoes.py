@@ -91,7 +91,8 @@ AGUARDAR_SALVAR_BOTAO_PAGINA = {
 
 AGUARDAR_TODOS_0105070402 = {
     # Aguarda o checkbox "Todos" aparecer no formulário de filtro
-    "estados_esperados": ["pronto", "erro"],
+    # csv_disponivel incluído: a IA devolve esse estado quando vê o botão "Gerar CSV" junto com o form
+    "estados_esperados": ["pronto", "csv_disponivel", "erro"],
     "timeout": 30,
     "intervalo": 2,
     "pergunta": (
@@ -136,7 +137,9 @@ CLICAR_DOWNLOAD_SALVAR = {
     # Aparece na parte inferior da janela quando um arquivo está sendo baixado
     "descricao": (
         "botão 'Salvar' na barra de download do Microsoft Edge. "
-        "Fica na parte inferior da tela, tem uma seta de dropdown ao lado. "
+        "Fica EXCLUSIVAMENTE na parte INFERIOR da tela — a barra aparece colada na borda de baixo da janela, abaixo de todo o conteúdo da página. "
+        "Tem uma seta de dropdown '˅' ao lado direito do botão. "
+        "NÃO é o botão 'Salvar' ou 'CSV' no toolbar do relatório Promax. "
         "Clique na parte esquerda do botão (não na seta)."
     ),
     "timeout": 30,

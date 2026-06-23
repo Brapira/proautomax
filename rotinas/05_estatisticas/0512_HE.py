@@ -37,14 +37,16 @@ def executar(driver, **kwargs):
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.NAME, "rotina")))
 
     select_quebra1 = wait.until(EC.presence_of_element_located((By.NAME, "opcaoRel")))
-    driver.execute_script("arguments[0].value = '06'; arguments[0].onchange();", select_quebra1)
+    driver.execute_script("arguments[0].value = '06'; if(arguments[0].onchange) arguments[0].onchange();", select_quebra1)
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Quebra 1 configurada para Setor/Cliente (06)")
 
-    checkbox = wait.until(
-        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='checkbox'][name='idConverteHecto'][value='S']"))
-    )
-    if not checkbox.is_selected():
-        driver.execute_script("arguments[0].click();", checkbox)
+    wait.until(EC.presence_of_element_located((By.NAME, "idConverteHecto")))
+    driver.execute_script("""
+        var cbs = document.getElementsByName('idConverteHecto');
+        for (var i = 0; i < cbs.length; i++) {
+            if (cbs[i].value === 'S' && !cbs[i].checked) { cbs[i].click(); break; }
+        }
+    """)
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Checkbox hectolitro selecionada")
 
     logging.info("📤 Executando Visualizar via JavaScript...")

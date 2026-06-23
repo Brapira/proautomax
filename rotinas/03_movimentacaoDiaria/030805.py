@@ -49,7 +49,7 @@ def executar(driver, **kwargs):
 
     # ── 3. Configura os parâmetros da tela ────────────────────────────────────
     wait.until(EC.presence_of_element_located((By.NAME, "opcaoRel")))
-    driver.execute_script("document.all.opcaoRel.value = '1';")
+    driver.execute_script("document.all.opcaoRel.value = '1'; if(document.all.opcaoRel.onchange) document.all.opcaoRel.onchange();")
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Classificação configurada para Conferencia")
 
     wait.until(EC.presence_of_element_located((By.NAME, "dataInicial")))
@@ -73,8 +73,12 @@ def executar(driver, **kwargs):
     try:
         WebDriverWait(driver, 300).until(EC.alert_is_present())
         alert = driver.switch_to.alert
-        logging.info(f"✅ '{alert.text}' — aceitando...")
+        alert_text = alert.text
+        logging.info(f"✅ '{alert_text}' → aceitando...")
         alert.accept()
+        if "Arquivo gerado com sucesso" not in alert_text:
+            logging.warning(f"⏭️ Sem dados para download: '{alert_text}' — pulando")
+            return "skip"
     except Exception as e:
         logging.error(f"❌ Timeout aguardando confirmação do relatório: {e}")
         return "skip"

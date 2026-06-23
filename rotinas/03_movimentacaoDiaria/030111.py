@@ -37,7 +37,7 @@ def executar(driver, **kwargs):
     wait.until(EC.frame_to_be_available_and_switch_to_it((By.NAME, "rotina")))
 
     select_quebra1 = wait.until(EC.presence_of_element_located((By.NAME, "opcaoRel")))
-    driver.execute_script("arguments[0].value = '9'; arguments[0].onchange();", select_quebra1)
+    driver.execute_script("arguments[0].value = '9'; if(arguments[0].onchange) arguments[0].onchange();", select_quebra1)
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Quebra 1 configurada para Operação (9)")
 
     logging.info("📤 Executando Visualizar via JavaScript...")
@@ -53,11 +53,10 @@ def executar(driver, **kwargs):
 
     try:
         analise = aguardar_estado_ia(
-            estados_esperados=["csv_disponivel", "sem_dados", "erro"],
-            timeout=300,
-            intervalo=4,
-            pergunta=AGUARDAR_CSV["pergunta"],
-            contexto=f"Rotina {CODIGO_ROTINA} — aguardando relatório de resumo de pedidos",
+            **AGUARDAR_CSV,
+            timeout=600,
+            intervalo=8,
+            contexto=f"Rotina {CODIGO_ROTINA} — aguardando relatório de resumo de pedidos (até 10 min)",
         )
     except TimeoutError:
         logging.error(f"❌ Timeout aguardando relatório na rotina {CODIGO_ROTINA}")
