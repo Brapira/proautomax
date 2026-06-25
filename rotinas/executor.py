@@ -148,6 +148,17 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
             logging.error(f"❌ Erro ao executar '{codigo}': {e}")
             traceback.print_exc()
 
+            # Detecta driver morto (WinError 10061 = conexão recusada, 10054 = conexão resetada)
+            e_str = str(e)
+            if "10061" in e_str or "10054" in e_str or "Connection aborted" in e_str:
+                logging.critical(f"💀 Driver WebDriver morreu — abortando execução das rotinas restantes")
+                rotinas_erros.append(codigo)
+                # Marca todas as restantes como erro
+                for item_restante in config["execucao"][idx:]:
+                    if item_restante.get("ativo", True) and item_restante["codigo"] not in rotinas_salvas:
+                        rotinas_erros.append(item_restante["codigo"])
+                break
+
             # 🤖 IA analisa a tela e sugere o que fazer
             logging.info("🤖 Consultando IA para diagnóstico...")
             try:

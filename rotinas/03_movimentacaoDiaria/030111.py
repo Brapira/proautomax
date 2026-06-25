@@ -53,9 +53,7 @@ def executar(driver, **kwargs):
 
     try:
         analise = aguardar_estado_ia(
-            **AGUARDAR_CSV,
-            timeout=600,
-            intervalo=8,
+            **{**AGUARDAR_CSV, "timeout": 600, "intervalo": 8},
             contexto=f"Rotina {CODIGO_ROTINA} — aguardando relatório de resumo de pedidos (até 10 min)",
         )
     except TimeoutError:
