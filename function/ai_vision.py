@@ -45,13 +45,13 @@ def _get_client() -> Anthropic:
     return _client
 
 
-MODELO = "claude-sonnet-4-5"
+MODELO = "claude-haiku-4-5-20251001"
 MAX_TOKENS = 500
 
 # Preços por milhão de tokens — Sonnet 4 (atualizar se a Anthropic mudar)
 # https://www.anthropic.com/pricing
-_PRECO_INPUT_POR_MILHAO  = 3.0    # USD
-_PRECO_OUTPUT_POR_MILHAO = 15.0   # USD
+_PRECO_INPUT_POR_MILHAO  = 1.0    # USD
+_PRECO_OUTPUT_POR_MILHAO = 5.0   # USD
 
 # Estados padronizados reconhecidos pelo sistema
 ESTADOS = {
