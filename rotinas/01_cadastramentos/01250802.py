@@ -5,16 +5,16 @@ Autor: Carol
 """
 
 import logging
+import time
 
 from function.abrir_rotinas import abrir_rotinas
 from function.funcoes_rotina import aguardar_tela_carregar
 from function.troca_janela import trocar_para_nova_janela
-from function.ai_vision import clicar_elemento_ia, focar_janela_promax
-from function.acoes import CLICAR_DOWNLOAD_SALVAR, CLICAR_CSV
+from function.ai_vision import aguardar_estado_ia, focar_janela_promax
+from function.acoes import AGUARDAR_DOWNLOAD_SALVAR
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-import time
 import pyautogui
 
 # Código da rotina no Promax
@@ -57,18 +57,20 @@ def executar(driver, **kwargs):
 
     except Exception as e:
         logging.error(f"❌ Erro ao executar GeraPlanilha(): {e}")
-        logging.info("Solicitando IA para clicar no botão CSV...")
-
-        if not clicar_elemento_ia(**CLICAR_CSV):
-            logging.error("❌ Falha ao clicar no botão CSV via IA.")
-            return "skip"  
-
-        logging.info("⏳ Aguardando relatório ser gerado após clique no CSV...")
-    
-
-    if not clicar_elemento_ia(**CLICAR_DOWNLOAD_SALVAR):
-        logging.error("❌ Falha ao clicar no botão Salvar do download via IA.")
         return "skip"
 
-    logging.info("⏳ Aguardando download...")
-    time.sleep(5)
+    logging.info("⏳ Aguardando barra de download aparecer...")
+    try:
+        analise = aguardar_estado_ia(
+            **AGUARDAR_DOWNLOAD_SALVAR,
+            contexto=f"Rotina {CODIGO_ROTINA} — aguardando download de faixa de preços",
+        )
+    except TimeoutError:
+        logging.error(f"❌ Timeout aguardando barra de download na rotina {CODIGO_ROTINA}")
+        return "skip"
+
+    if analise.get("estado") != "download_salvar":
+        logging.error(f"❌ Barra de download não apareceu: {analise.get('estado')}")
+        return "skip"
+
+    logging.info("✅ Barra de download detectada — executor.py vai salvar o arquivo")
