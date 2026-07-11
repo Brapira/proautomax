@@ -71,9 +71,32 @@ SYNC_ROTINAS_JSON = os.getenv("SYNC_ROTINAS_JSON", "true").lower() in ("1", "tru
 # parado no minuto exato).
 AGENDADOR_TOLERANCIA_MIN = int(os.getenv("AGENDADOR_TOLERANCIA_MIN", "10"))
 
-# Mapa periodo -> script / json
-SCRIPTS = {"manha": SCRIPT_MANHA, "tarde": SCRIPT_TARDE}
-JSONS   = {"manha": JSON_MANHA, "tarde": JSON_TARDE}
+# Config da Crítica (projeto Selenium SEPARADO do ProAutoMax)
+CRITICA_DIR    = os.getenv("CRITICA_DIR", r"C:\ProAutoCritica")
+CRITICA_PYTHON = os.getenv("CRITICA_PYTHON", PYTHON_BIN)  # venv próprio da crítica
+CRITICA_SCRIPT = os.getenv("CRITICA_SCRIPT", "main.py")
+
+# Mapa periodo -> configuração do job.
+#   script/cwd/python : o que rodar e onde
+#   args              : argumentos de linha de comando
+#   sync_json         : nome do JSON de rotinas a sincronizar do painel (None = não sincroniza)
+#   parser            : formato de log/resumo ("proautomax" ou "critica")
+JOBS = {
+    "manha": {
+        "script": SCRIPT_MANHA, "cwd": PROJECT_DIR, "python": PYTHON_BIN,
+        "args": [], "sync_json": JSON_MANHA, "parser": "proautomax",
+    },
+    "tarde": {
+        "script": SCRIPT_TARDE, "cwd": PROJECT_DIR, "python": PYTHON_BIN,
+        "args": [], "sync_json": JSON_TARDE, "parser": "proautomax",
+    },
+    # Crítica: 1 ciclo por run (--runs 1). O intercalar da tarde vem da ORDEM
+    # de enfileiramento na fila, não de encadeamento interno.
+    "critica": {
+        "script": CRITICA_SCRIPT, "cwd": CRITICA_DIR, "python": CRITICA_PYTHON,
+        "args": ["--runs", "1"], "sync_json": None, "parser": "critica",
+    },
+}
 
 if not SUPABASE_URL or not SUPABASE_SERVICE_KEY:
     raise SystemExit("❌ SUPABASE_URL e SUPABASE_SERVICE_KEY são obrigatórios no .env")
@@ -150,14 +173,19 @@ class BufferLogs:
 
 
 # ─── Parsing das linhas vindas do robô ────────────────────────────────────────
-# Formato do logger do projeto: "asctime | LEVEL | message"
-_RE_LINHA = re.compile(r"^.*?\|\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s*\|\s*(.*)$")
+# ProAutoMax: "asctime | LEVEL | message"
+_RE_LINHA_PROAUTOMAX = re.compile(r"^.*?\|\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s*\|\s*(.*)$")
+# Crítica: "[HH:MM:SS] LEVEL nome.do.modulo: message"
+_RE_LINHA_CRITICA = re.compile(
+    r"^\[\d{1,2}:\d{2}:\d{2}\]\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s+\S+:\s*(.*)$"
+)
 
 
-def parse_linha(linha: str):
+def parse_linha(linha: str, parser: str = "proautomax"):
     """Devolve (nivel, mensagem). Linhas fora do formato viram INFO cru."""
     linha = linha.rstrip("\n").rstrip("\r")
-    m = _RE_LINHA.match(linha)
+    regex = _RE_LINHA_CRITICA if parser == "critica" else _RE_LINHA_PROAUTOMAX
+    m = regex.match(linha)
     if m:
         return m.group(1), m.group(2)
     return "INFO", linha
@@ -174,24 +202,33 @@ def _to_list(s: str):
         return []
 
 
-def parse_resumo(mensagens: list[str]) -> dict:
+def _resumo_vazio() -> dict:
+    return {
+        "salvas": [], "erros": [], "ignoradas": [],
+        "qtd_salvas": 0, "qtd_erros": 0, "qtd_ignoradas": 0,
+        "input_tokens": 0, "output_tokens": 0, "chamadas_api": 0,
+        "custo_usd": 0.0, "custo_brl": 0.0, "duracao_log": None,
+        "completou": False,
+    }
+
+
+def parse_resumo(mensagens: list[str], parser: str = "proautomax") -> dict:
+    """Escolhe o parser certo conforme o job."""
+    if parser == "critica":
+        return _parse_resumo_critica(mensagens)
+    return _parse_resumo_proautomax(mensagens)
+
+
+def _parse_resumo_proautomax(mensagens: list[str]) -> dict:
     """
-    Extrai o resumo final a partir das mensagens de log do executor.py:
+    Resumo do executor do ProAutoMax:
         ✅ Salvas com sucesso:  N  → [...]
         ❌ Com erro:            N → [...]
         ⏭️  Ignoradas:           N → [...]
-        Tokens de entrada   : N
-        Tokens de saída     : N
-        Chamadas realizadas : N
-        Custo estimado      : $X USD (~R$ Y)
-        ⏱️  Tempo total de execução: Ns
+        Tokens de entrada / saída / Chamadas / Custo estimado / Tempo total
     """
     texto = "\n".join(mensagens)
-    res = {
-        "salvas": [], "erros": [], "ignoradas": [],
-        "input_tokens": 0, "output_tokens": 0, "chamadas_api": 0,
-        "custo_usd": 0.0, "custo_brl": 0.0, "duracao_log": None,
-    }
+    res = _resumo_vazio()
 
     def busca_lista(rotulo):
         m = re.search(rotulo + r"\s*\d+\s*[→\->]+\s*(\[[^\]]*\])", texto)
@@ -200,6 +237,9 @@ def parse_resumo(mensagens: list[str]) -> dict:
     res["salvas"]    = busca_lista(r"Salvas com sucesso:")
     res["erros"]     = busca_lista(r"Com erro:")
     res["ignoradas"] = busca_lista(r"Ignoradas:")
+    res["qtd_salvas"]    = len(res["salvas"])
+    res["qtd_erros"]     = len(res["erros"])
+    res["qtd_ignoradas"] = len(res["ignoradas"])
 
     if m := re.search(r"Tokens de entrada\s*:\s*([\d.,]+)", texto):
         res["input_tokens"] = _to_int(m.group(1))
@@ -213,6 +253,29 @@ def parse_resumo(mensagens: list[str]) -> dict:
     if m := re.search(r"Tempo total de execu[çc][ãa]o:\s*(\d+)\s*s", texto):
         res["duracao_log"] = int(m.group(1))
 
+    res["completou"] = "RESUMO DA EXECU" in texto
+    return res
+
+
+def _parse_resumo_critica(mensagens: list[str]) -> dict:
+    """
+    Resumo do executor da Crítica:
+        RESUMO: X sucesso(s), Y sem pedidos, Z falha(s)
+    Mapeia: salvas=X, ignoradas(sem pedidos)=Y, erros=Z. Sem custo de IA.
+    """
+    texto = "\n".join(mensagens)
+    res = _resumo_vazio()
+
+    m = re.search(
+        r"RESUMO:\s*(\d+)\s*sucesso.*?,\s*(\d+)\s*sem pedidos.*?,\s*(\d+)\s*falha",
+        texto,
+        re.IGNORECASE,
+    )
+    if m:
+        res["qtd_salvas"]    = int(m.group(1))
+        res["qtd_ignoradas"] = int(m.group(2))
+        res["qtd_erros"]     = int(m.group(3))
+        res["completou"]     = True
     return res
 
 
@@ -229,7 +292,7 @@ def sincronizar_rotinas_json(periodo: str, emite) -> bool:
 
     Retorna True se gravou o arquivo, False se manteve o do disco.
     """
-    nome_json = JSONS.get(periodo)
+    nome_json = (JOBS.get(periodo) or {}).get("sync_json")
     if not nome_json:
         return False
 
@@ -331,7 +394,7 @@ def _matar_processo(proc):
 def executar_run(run: dict):
     run_id  = run["id"]
     periodo = (run.get("periodo") or "manha").lower()
-    script  = SCRIPTS.get(periodo)
+    job     = JOBS.get(periodo)
 
     buf = BufferLogs(run_id)
     mensagens = []
@@ -340,24 +403,32 @@ def executar_run(run: dict):
         mensagens.append(msg)
         buf.add(nivel, msg)
 
-    log_console(f"▶ iniciando run {run_id} (periodo={periodo}, script={script})")
-    emite("INFO", f"🤖 Agente iniciou a execução ({periodo}) — script {script}")
+    parser = (job or {}).get("parser", "proautomax")
 
-    if not script:
-        emite("ERROR", f"Período inválido: {periodo}")
+    if not job:
+        log_console(f"▶ run {run_id}: período/job inválido '{periodo}'")
+        emite("ERROR", f"Período/job inválido: {periodo}")
         buf.flush()
-        finalizar_run(run_id, run, "error", parse_resumo(mensagens))
+        finalizar_run(run_id, run, "error", parse_resumo(mensagens, parser))
         return
 
-    caminho_script = os.path.join(PROJECT_DIR, script)
+    script = job["script"]
+    cwd    = job["cwd"]
+    python = job["python"]
+    args   = job.get("args", [])
+
+    log_console(f"▶ iniciando run {run_id} (periodo={periodo}, script={script}, cwd={cwd})")
+    emite("INFO", f"🤖 Agente iniciou a execução ({periodo}) — {script} {' '.join(args)}".strip())
+
+    caminho_script = os.path.join(cwd, script)
     if not os.path.exists(caminho_script):
         emite("ERROR", f"Script não encontrado: {caminho_script}")
         buf.flush()
-        finalizar_run(run_id, run, "error", parse_resumo(mensagens))
+        finalizar_run(run_id, run, "error", parse_resumo(mensagens, parser))
         return
 
-    # Sincroniza o rotinas.json a partir do painel (toggles ativo/inativo)
-    if SYNC_ROTINAS_JSON:
+    # Sincroniza o rotinas.json a partir do painel (só jobs que usam a tabela routines)
+    if SYNC_ROTINAS_JSON and job.get("sync_json"):
         sincronizar_rotinas_json(periodo, emite)
         buf.flush()
 
@@ -391,8 +462,8 @@ def executar_run(run: dict):
 
     try:
         proc = subprocess.Popen(
-            [PYTHON_BIN, script],
-            cwd=PROJECT_DIR,
+            [python, script, *args],
+            cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,   # junta stderr (traceback) no mesmo fluxo
             text=True,
@@ -406,7 +477,7 @@ def executar_run(run: dict):
         threading.Thread(target=watcher, args=(proc,), daemon=True).start()
 
         for linha in proc.stdout:
-            nivel, msg = parse_linha(linha)
+            nivel, msg = parse_linha(linha, parser)
             if msg.strip():
                 emite(nivel, msg)
 
@@ -424,14 +495,13 @@ def executar_run(run: dict):
         log_console(f"⏹ run {run_id} interrompida pelo usuário (exit code {rc})")
         return
 
-    resumo = parse_resumo(mensagens)
+    resumo = parse_resumo(mensagens, parser)
 
-    # Decide o status final
-    achou_resumo = bool(re.search(r"RESUMO DA EXECU", "\n".join(mensagens)))
-    if rc not in (0, None) and not achou_resumo:
+    # Decide o status final (usa contagens + flag de "completou")
+    if rc not in (0, None) and not resumo["completou"]:
         status = "error"
-    elif resumo["erros"]:
-        status = "partial" if resumo["salvas"] else "error"
+    elif resumo["qtd_erros"] > 0:
+        status = "partial" if resumo["qtd_salvas"] > 0 else "error"
     else:
         status = "success"
 
@@ -457,9 +527,9 @@ def finalizar_run(run_id: str, run: dict, status: str, resumo: dict):
         "salvas": resumo["salvas"],
         "erros": resumo["erros"],
         "ignoradas": resumo["ignoradas"],
-        "qtd_salvas": len(resumo["salvas"]),
-        "qtd_erros": len(resumo["erros"]),
-        "qtd_ignoradas": len(resumo["ignoradas"]),
+        "qtd_salvas": resumo["qtd_salvas"],
+        "qtd_erros": resumo["qtd_erros"],
+        "qtd_ignoradas": resumo["qtd_ignoradas"],
         "input_tokens": resumo["input_tokens"],
         "output_tokens": resumo["output_tokens"],
         "chamadas_api": resumo["chamadas_api"],
@@ -485,26 +555,26 @@ def _enfileirar(periodo: str):
         log_console(f"⚠️ falha ao enfileirar agendamento: {e}")
 
 
-def _ja_existe_agendada(periodo: str, ini, fim) -> bool:
+def _ja_existe_agendada(periodo, ini, fim) -> bool:
     """
-    Já existe uma run 'agendado' desse período criada na janela [ini, fim]?
+    Já existe uma run 'agendado' criada na janela [ini, fim]?
+    Se `periodo` for None, considera qualquer período (usado p/ sequências,
+    que enfileiram vários períodos numa mesma janela).
     Serve de guarda contra disparo duplo se o agente reiniciar dentro da janela
     de tolerância (o set em memória se perde no restart; o banco não).
     ini/fim são datetimes locais (convertidos p/ UTC, pois created_at é UTC).
     """
     try:
-        r = (
+        q = (
             sb.table("runs")
             .select("id")
             .eq("origem", "agendado")
-            .eq("periodo", periodo)
             .gte("created_at", ini.astimezone(timezone.utc).isoformat())
             .lte("created_at", fim.astimezone(timezone.utc).isoformat())
-            .limit(1)
-            .execute()
-            .data
         )
-        return bool(r)
+        if periodo is not None:
+            q = q.eq("periodo", periodo)
+        return bool(q.limit(1).execute().data)
     except Exception:
         return False  # na dúvida não bloqueia (o set em memória ainda protege)
 
@@ -547,15 +617,28 @@ def loop_agendador():
                 if chave in disparados:
                     continue  # já tratamos nessa sessão do agente
 
-                periodo = (ag.get("periodo") or "manha").lower()
+                janela_fim = agendado_dt + grace + timedelta(minutes=2)
+                sequencia = ag.get("sequencia")
 
-                # Guarda contra disparo duplo após restart dentro da janela
-                if _ja_existe_agendada(periodo, agendado_dt, agendado_dt + grace + timedelta(minutes=2)):
+                if isinstance(sequencia, list) and sequencia:
+                    # Agendamento em SEQUÊNCIA: enfileira a lista inteira, em ordem.
+                    # Um horário só dispara T,C,T,C... — a ordem de created_at
+                    # (inserts sequenciais) garante que o agente rode nessa ordem.
+                    if _ja_existe_agendada(None, agendado_dt, janela_fim):
+                        disparados.add(chave)
+                        continue
                     disparados.add(chave)
-                    continue
-
-                disparados.add(chave)
-                _enfileirar(periodo)
+                    log_console(f"⏰ sequência disparou ({len(sequencia)} itens): {sequencia}")
+                    for item in sequencia:
+                        _enfileirar(str(item).lower())
+                else:
+                    # Agendamento simples: 1 run do período (comportamento antigo)
+                    periodo = (ag.get("periodo") or "manha").lower()
+                    if _ja_existe_agendada(periodo, agendado_dt, janela_fim):
+                        disparados.add(chave)
+                        continue
+                    disparados.add(chave)
+                    _enfileirar(periodo)
         except Exception as e:
             log_console(f"⚠️ erro no agendador: {e}")
         time.sleep(20)
