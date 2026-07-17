@@ -280,15 +280,22 @@ def _parse_resumo_critica(mensagens: list[str]) -> dict:
 
 
 # ─── Sincroniza o JSON de rotinas a partir do painel ─────────────────────────
-def sincronizar_rotinas_json(periodo: str, emite) -> bool:
+def sincronizar_rotinas_json(periodo: str, emite, rotinas_filtro=None) -> bool:
     """
     Regenera o JSON de rotinas (na raiz do projeto) a partir da tabela 'routines',
     fazendo o painel ser a fonte da verdade dos toggles ativo/inativo.
 
+    rotinas_filtro:
+      - None  -> comportamento normal: usa TODAS as rotinas do período, cada uma
+                 com o seu ativo da tabela (a manhã/tarde "completa").
+      - lista de códigos -> run CUSTOMIZADA: gera o JSON só com essas rotinas,
+                 TODAS marcadas como ativo=True (roda exatamente o subconjunto),
+                 sem tocar nos flags globais da tabela.
+
     Segurança:
       - Faz backup do JSON atual em <arquivo>.bak antes de sobrescrever.
-      - Se a tabela vier vazia para esse período, NÃO toca no arquivo (evita
-        rodar zero rotina por engano) e mantém o que já está no disco.
+      - Se não sobrar nenhuma rotina, NÃO toca no arquivo (evita rodar zero
+        rotina por engano) e mantém o que já está no disco.
 
     Retorna True se gravou o arquivo, False se manteve o do disco.
     """
@@ -313,6 +320,17 @@ def sincronizar_rotinas_json(periodo: str, emite) -> bool:
         emite("WARNING", f"Nenhuma rotina '{periodo}' na tabela — mantendo o {nome_json} atual do disco.")
         return False
 
+    # Run customizada: filtra pelos códigos pedidos e força ativo=True
+    custom = isinstance(rotinas_filtro, list) and len(rotinas_filtro) > 0
+    if custom:
+        alvo = {str(c) for c in rotinas_filtro}
+        rows = [r for r in rows if str(r["codigo"]) in alvo]
+        if not rows:
+            emite("WARNING",
+                  f"Nenhuma das rotinas pedidas {sorted(alvo)} existe no período "
+                  f"'{periodo}' — mantendo o {nome_json} do disco.")
+            return False
+
     execucao = []
     for r in rows:
         params = dict(r.get("params") or {})
@@ -323,7 +341,8 @@ def sincronizar_rotinas_json(periodo: str, emite) -> bool:
             "destino": r.get("destino") or "",
             "nome": r.get("nome") or f"{r['codigo']}.csv",
             "descricao": r.get("descricao") or r["codigo"],
-            "ativo": bool(r.get("ativo")),
+            # custom => tudo ativo; normal => respeita o flag da tabela
+            "ativo": True if custom else bool(r.get("ativo")),
         }
         if ext:
             item["extensao_download"] = ext
@@ -345,8 +364,12 @@ def sincronizar_rotinas_json(periodo: str, emite) -> bool:
         emite("ERROR", f"Falha ao gravar {nome_json}: {e}")
         return False
 
-    ativas = sum(1 for it in execucao if it["ativo"])
-    emite("INFO", f"🔄 {nome_json} sincronizado do painel — {ativas} ativa(s) de {len(execucao)}")
+    if custom:
+        codigos = [it["codigo"] for it in execucao]
+        emite("INFO", f"🔧 {nome_json} CUSTOM — {len(codigos)} rotina(s): {codigos}")
+    else:
+        ativas = sum(1 for it in execucao if it["ativo"])
+        emite("INFO", f"🔄 {nome_json} sincronizado do painel — {ativas} ativa(s) de {len(execucao)}")
     return True
 
 
@@ -429,7 +452,8 @@ def executar_run(run: dict):
 
     # Sincroniza o rotinas.json a partir do painel (só jobs que usam a tabela routines)
     if SYNC_ROTINAS_JSON and job.get("sync_json"):
-        sincronizar_rotinas_json(periodo, emite)
+        rotinas_filtro = run.get("rotinas")  # None = completo | lista = custom
+        sincronizar_rotinas_json(periodo, emite, rotinas_filtro)
         buf.flush()
 
     # Força UTF-8 no subprocesso para os emojis/acentos do log não quebrarem
@@ -545,12 +569,14 @@ def finalizar_run(run_id: str, run: dict, status: str, resumo: dict):
 # ─── Agendador interno (opcional) ─────────────────────────────────────────────
 # Convenção de dias_semana: 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb, 7=Dom
 # (bate com o painel). Python weekday(): Seg=0 ... Dom=6  ->  +1
-def _enfileirar(periodo: str):
+def _enfileirar(periodo: str, rotinas=None):
+    payload = {"periodo": periodo, "status": "queued", "origem": "agendado"}
+    if isinstance(rotinas, list) and rotinas:
+        payload["rotinas"] = rotinas
     try:
-        sb.table("runs").insert(
-            {"periodo": periodo, "status": "queued", "origem": "agendado"}
-        ).execute()
-        log_console(f"⏰ agendamento disparou — run '{periodo}' enfileirada")
+        sb.table("runs").insert(payload).execute()
+        extra = f" (custom: {rotinas})" if rotinas else ""
+        log_console(f"⏰ agendamento disparou — run '{periodo}' enfileirada{extra}")
     except Exception as e:
         log_console(f"⚠️ falha ao enfileirar agendamento: {e}")
 
@@ -632,13 +658,13 @@ def loop_agendador():
                     for item in sequencia:
                         _enfileirar(str(item).lower())
                 else:
-                    # Agendamento simples: 1 run do período (comportamento antigo)
                     periodo = (ag.get("periodo") or "manha").lower()
+                    rotinas = ag.get("rotinas")  # None = completo | lista = custom
                     if _ja_existe_agendada(periodo, agendado_dt, janela_fim):
                         disparados.add(chave)
                         continue
                     disparados.add(chave)
-                    _enfileirar(periodo)
+                    _enfileirar(periodo, rotinas if isinstance(rotinas, list) and rotinas else None)
         except Exception as e:
             log_console(f"⚠️ erro no agendador: {e}")
         time.sleep(20)
