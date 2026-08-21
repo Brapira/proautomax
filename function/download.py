@@ -17,10 +17,27 @@ load_dotenv()
 PASTA_DOWNLOADS =  os.getenv("PATH_USER") #str(Path.home() / "Downloads")
 
 
-def confirmar_download():
+def confirmar_download(metodo="ia"):
+    """
+    Confirma o 'Salvar' da barra de download.
+      metodo='ia'      -> IA localiza e clica o botão (comportamento atual)
+      metodo='teclado' -> determinístico: foca a barra de notificação do
+                          IE-mode (Alt+N) e salva (Alt+S), sem depender de pixel.
+    """
     time.sleep(2)
-    logging.info("⏳ Procurando botão Salvar...")
 
+    if metodo == "teclado":
+        logging.info("⌨️ Confirmando download via teclado (Alt+N → Alt+S)...")
+        try:
+            send_keys("%n")   # foca a barra de notificação (IE-mode)
+            time.sleep(0.6)
+            send_keys("%s")   # 'Salvar'
+            logging.info("⌨️ Alt+S enviado")
+            return
+        except Exception as e:
+            logging.warning(f"   teclado falhou ({e}); caindo pra IA")
+
+    logging.info("⏳ Procurando botão Salvar...")
     # Tenta clicar no botão Salvar da barra de download
     if not clicar_elemento_ia(**CLICAR_DOWNLOAD_SALVAR):
         logging.error("❌ Botão Salvar não encontrado.")
@@ -165,6 +182,37 @@ def mover_arquivo_com_retry(origem, destino, max_tentativas=5):
     return False
 
 
+def _confirmar_e_aguardar_arquivo(extensao, tentativas=3, espera_por_tentativa=40):
+    """
+    Confirma o 'Salvar' e espera o arquivo aparecer. Se não vier dentro de
+    `espera_por_tentativa` segundos, RE-confirma e espera de novo.
+
+    Alterna o método: 1ª tentativa via IA (comportamento atual, que já funciona
+    na maioria), 2ª via teclado (determinístico), 3ª via IA. Orçamento total ≈
+    tentativas * espera_por_tentativa (≈120s, igual ao antigo).
+
+    Retorna o nome do arquivo baixado, ou None se esgotar as tentativas.
+    """
+    metodos = ["ia", "teclado", "ia"]
+    for i in range(1, tentativas + 1):
+        metodo = metodos[(i - 1) % len(metodos)]
+        logging.info(f"💾 Confirmação de download — tentativa {i}/{tentativas} (via {metodo})")
+        try:
+            confirmar_download(metodo=metodo)
+        except Exception as e:
+            logging.warning(f"   confirmar_download falhou: {e}")
+
+        try:
+            return aguardar_novo_arquivo(timeout=espera_por_tentativa, extensao=extensao)
+        except TimeoutError:
+            logging.warning(
+                f"   ⏱️ arquivo não apareceu em {espera_por_tentativa}s — "
+                f"re-confirmando o Salvar"
+            )
+    logging.error("❌ Arquivo não baixou após todas as tentativas de confirmação")
+    return None
+
+
 def salvar_arquivo(destino, nome_arquivo, extensao_download=None):
     """
     Fluxo completo de salvamento.
@@ -183,17 +231,15 @@ def salvar_arquivo(destino, nome_arquivo, extensao_download=None):
     """
     logging.info("💾 Iniciando salvamento...")
 
-    # 1. Confirma o download (Tab 3x + Enter)
-    confirmar_download()
-
-    # 2. Aguarda o arquivo aparecer
-    # extensao_download: override explícito (ex: .txt para 030805)
-    # default .inf: o Promax sempre baixa .inf; o nome final (nome_arquivo) só renomeia ao mover
     extensao = extensao_download or ".inf"
-    try:
-        arquivo_baixado = aguardar_novo_arquivo(timeout=120, extensao=extensao)
-    except TimeoutError as e:
-        logging.error(f"❌ {e}")
+
+    # Confirma o Salvar e espera o arquivo, RE-TENTANDO se não aparecer.
+    # Motivo: se o clique do 'Salvar' erra o alvo (IA às vezes localiza mal),
+    # o download nunca inicia. Em vez de esperar 120s à toa e desistir, a gente
+    # re-confirma algumas vezes (a IA tira print novo e costuma acertar; e uma
+    # das tentativas usa teclado, que é determinístico).
+    arquivo_baixado = _confirmar_e_aguardar_arquivo(extensao)
+    if not arquivo_baixado:
         raise Exception("Timeout: arquivo não foi baixado")
     
     # 3. Move para o destino final
