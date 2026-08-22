@@ -16,6 +16,11 @@ load_dotenv()
 # Pasta Downloads padrão do Windows
 PASTA_DOWNLOADS =  os.getenv("PATH_USER") #str(Path.home() / "Downloads")
 
+# Se o Edge estiver configurado para baixar SEM perguntar (sem barra de 'Salvar'),
+# ligue isto no .env: DOWNLOAD_AUTOMATICO=true
+# Aí o robô pula o passo do 'Salvar' (que a IA erra) e só espera o arquivo cair.
+DOWNLOAD_AUTOMATICO = os.getenv("DOWNLOAD_AUTOMATICO", "false").lower() in ("1", "true", "sim", "yes")
+
 
 def confirmar_download(metodo="ia"):
     """
@@ -187,18 +192,16 @@ def _confirmar_e_aguardar_arquivo(extensao, tentativas=3, espera_por_tentativa=4
     Confirma o 'Salvar' e espera o arquivo aparecer. Se não vier dentro de
     `espera_por_tentativa` segundos, RE-confirma e espera de novo.
 
-    Alterna o método: 1ª tentativa via IA (comportamento atual, que já funciona
-    na maioria), 2ª via teclado (determinístico), 3ª via IA. Orçamento total ≈
+    Cada tentativa reconfirma via IA (print novo — a IA costuma acertar numa
+    tentativa seguinte quando erra o alvo na primeira). Orçamento total ≈
     tentativas * espera_por_tentativa (≈120s, igual ao antigo).
 
     Retorna o nome do arquivo baixado, ou None se esgotar as tentativas.
     """
-    metodos = ["ia", "teclado", "ia"]
     for i in range(1, tentativas + 1):
-        metodo = metodos[(i - 1) % len(metodos)]
-        logging.info(f"💾 Confirmação de download — tentativa {i}/{tentativas} (via {metodo})")
+        logging.info(f"💾 Confirmação de download — tentativa {i}/{tentativas}")
         try:
-            confirmar_download(metodo=metodo)
+            confirmar_download(metodo="ia")
         except Exception as e:
             logging.warning(f"   confirmar_download falhou: {e}")
 
@@ -233,14 +236,20 @@ def salvar_arquivo(destino, nome_arquivo, extensao_download=None):
 
     extensao = extensao_download or ".inf"
 
-    # Confirma o Salvar e espera o arquivo, RE-TENTANDO se não aparecer.
-    # Motivo: se o clique do 'Salvar' erra o alvo (IA às vezes localiza mal),
-    # o download nunca inicia. Em vez de esperar 120s à toa e desistir, a gente
-    # re-confirma algumas vezes (a IA tira print novo e costuma acertar; e uma
-    # das tentativas usa teclado, que é determinístico).
-    arquivo_baixado = _confirmar_e_aguardar_arquivo(extensao)
-    if not arquivo_baixado:
-        raise Exception("Timeout: arquivo não foi baixado")
+    if DOWNLOAD_AUTOMATICO:
+        # Edge baixa sem perguntar — não há botão 'Salvar' pra clicar.
+        # Só esperamos o arquivo aparecer na pasta monitorada.
+        logging.info("⚡ Modo download automático (sem 'Salvar') — aguardando arquivo...")
+        try:
+            arquivo_baixado = aguardar_novo_arquivo(timeout=120, extensao=extensao)
+        except TimeoutError as e:
+            logging.error(f"❌ {e}")
+            raise Exception("Timeout: arquivo não foi baixado")
+    else:
+        # Modo antigo: confirma o 'Salvar' (via IA), re-tentando se não vier.
+        arquivo_baixado = _confirmar_e_aguardar_arquivo(extensao)
+        if not arquivo_baixado:
+            raise Exception("Timeout: arquivo não foi baixado")
     
     # 3. Move para o destino final
     origem = os.path.join(PASTA_DOWNLOADS, arquivo_baixado)
