@@ -25,19 +25,17 @@ DOWNLOAD_AUTOMATICO = os.getenv("DOWNLOAD_AUTOMATICO", "false").lower() in ("1",
 def confirmar_download(metodo="ia"):
     """
     Confirma o 'Salvar' da barra de download.
-      metodo='ia'      -> IA localiza e clica o botão (comportamento atual)
-      metodo='teclado' -> determinístico: foca a barra de notificação do
-                          IE-mode (Alt+N) e salva (Alt+S), sem depender de pixel.
+      metodo='ia'      -> IA localiza e clica o botão (fallback)
+      metodo='teclado' -> determinístico: Alt+Shift+S na barra de notificação
+                          do IE-mode (não depende de pixel/resolução).
     """
     time.sleep(2)
 
     if metodo == "teclado":
-        logging.info("⌨️ Confirmando download via teclado (Alt+N → Alt+S)...")
+        logging.info("⌨️ Confirmando download via teclado (Alt+Shift+S)...")
         try:
-            send_keys("%n")   # foca a barra de notificação (IE-mode)
-            time.sleep(0.6)
-            send_keys("%s")   # 'Salvar'
-            logging.info("⌨️ Alt+S enviado")
+            send_keys("%+s")   # Alt+Shift+S = 'Salvar' na barra de notificação do IE-mode
+            logging.info("⌨️ Alt+Shift+S enviado")
             return
         except Exception as e:
             logging.warning(f"   teclado falhou ({e}); caindo pra IA")
@@ -192,16 +190,19 @@ def _confirmar_e_aguardar_arquivo(extensao, tentativas=3, espera_por_tentativa=4
     Confirma o 'Salvar' e espera o arquivo aparecer. Se não vier dentro de
     `espera_por_tentativa` segundos, RE-confirma e espera de novo.
 
-    Cada tentativa reconfirma via IA (print novo — a IA costuma acertar numa
-    tentativa seguinte quando erra o alvo na primeira). Orçamento total ≈
-    tentativas * espera_por_tentativa (≈120s, igual ao antigo).
+    Método principal: TECLADO (Alt+Shift+S) — determinístico, não depende de
+    pixel nem da IA. A última tentativa cai pra IA só como rede de segurança.
+    Orçamento total ≈ tentativas * espera_por_tentativa (≈120s).
 
     Retorna o nome do arquivo baixado, ou None se esgotar as tentativas.
     """
+    # teclado nas primeiras, IA na última como fallback
+    metodos = ["teclado"] * (tentativas - 1) + ["ia"] if tentativas > 1 else ["teclado"]
     for i in range(1, tentativas + 1):
-        logging.info(f"💾 Confirmação de download — tentativa {i}/{tentativas}")
+        metodo = metodos[i - 1]
+        logging.info(f"💾 Confirmação de download — tentativa {i}/{tentativas} (via {metodo})")
         try:
-            confirmar_download(metodo="ia")
+            confirmar_download(metodo=metodo)
         except Exception as e:
             logging.warning(f"   confirmar_download falhou: {e}")
 
