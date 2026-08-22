@@ -61,7 +61,7 @@ ie_options.attach_to_edge_chrome = True
 ie_options.edge_executable_path = r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 ie_options.ignore_zoom_level = True
 ie_options.require_window_focus = True
-ie_options.ensure_clean_session = True
+# ie_options.ensure_clean_session = True
 ie_options.ignore_protected_mode_settings = True
 ie_options.initial_browser_url = "https://brapira.promaxcloud.com.br"
 
