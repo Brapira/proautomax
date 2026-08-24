@@ -125,7 +125,7 @@ def fechar_barra_download(timeout=5) -> bool:
     return False
 
 
-
+def confirmar_download(metodo="uia"):
     """
     Confirma o 'Salvar' da barra de download.
       metodo='uia'     -> DETERMINÍSTICO: clica o SplitButton 'Salvar' da barra
