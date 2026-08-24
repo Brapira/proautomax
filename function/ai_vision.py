@@ -139,6 +139,9 @@ def resetar_contador():
 # Precisamos multiplicar por _escala_x/_escala_y para chegar na posição real da tela.
 _escala_x: float = 1.0
 _escala_y: float = 1.0
+# Dimensões da imagem reduzida enviada à IA (p/ validar coordenadas devolvidas)
+_img_w: int = 0
+_img_h: int = 0
 
 
 def tirar_screenshot() -> str:
@@ -149,7 +152,7 @@ def tirar_screenshot() -> str:
     IMPORTANTE: armazena _escala_x/_escala_y para que clicar_elemento_ia()
     converta coordenadas da IA (espaço da imagem reduzida) para a tela real.
     """
-    global _escala_x, _escala_y
+    global _escala_x, _escala_y, _img_w, _img_h
 
     screenshot   = pyautogui.screenshot()
     largura_real = screenshot.width
@@ -164,9 +167,11 @@ def tirar_screenshot() -> str:
 
         _escala_x = largura_real / nova_largura   # ex: 1920/1280 = 1.5
         _escala_y = altura_real  / nova_altura
+        _img_w, _img_h = nova_largura, nova_altura
     else:
         _escala_x = 1.0
         _escala_y = 1.0
+        _img_w, _img_h = largura_real, altura_real
 
     buffer = BytesIO()
     screenshot.save(buffer, format="PNG", optimize=True)
@@ -392,6 +397,18 @@ def clicar_elemento_ia(
         if coords and analise.get("confianca", 0) >= 6:
             x_img, y_img = coords.get("x"), coords.get("y")
             if x_img and y_img:
+                # VALIDA: coordenada fora dos limites da imagem = resposta ruim
+                # do modelo (ex.: y=1263 numa imagem de 720px). Sem isto, o
+                # ×escala manda o clique pra fora da tela e o download falha.
+                if _img_w and _img_h and not (0 <= x_img <= _img_w and 0 <= y_img <= _img_h):
+                    logging.warning(
+                        f"⚠️ Coordenada da IA fora da imagem ({x_img},{y_img}) vs "
+                        f"{_img_w}x{_img_h} — descartando e re-analisando"
+                    )
+                    screenshot_b64 = None
+                    time.sleep(1)
+                    continue
+
                 # Converte coordenadas da imagem reduzida para a tela real
                 x_real = int(x_img * _escala_x)
                 y_real = int(y_img * _escala_y)

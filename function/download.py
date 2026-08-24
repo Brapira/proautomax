@@ -8,6 +8,7 @@ import os
 import time
 import shutil
 from pywinauto.keyboard import send_keys
+from pywinauto import Desktop
 from dotenv import load_dotenv
 from function.ai_vision import clicar_elemento_ia
 from function.acoes import CLICAR_DOWNLOAD_SALVAR
@@ -22,14 +23,69 @@ PASTA_DOWNLOADS =  os.getenv("PATH_USER") #str(Path.home() / "Downloads")
 DOWNLOAD_AUTOMATICO = os.getenv("DOWNLOAD_AUTOMATICO", "false").lower() in ("1", "true", "sim", "yes")
 
 
-def confirmar_download(metodo="ia"):
+def _clicar_salvar_uia(timeout=15) -> bool:
+    """
+    Clica no botão 'Salvar' da barra de download do IE-mode por ACESSIBILIDADE.
+
+    Estrutura descoberta na VM:
+        Pane  class='Frame Notification Bar'
+          ToolBar name='Notificação' class='DirectUIHWND'
+            SplitButton name='Salvar'   ← alvo (é SplitButton, não Button!)
+
+    Não usa pixel/IA/atalho — acha o controle pelo nome e invoca. Determinístico.
+    Retorna True se clicou, False se não achou a barra dentro do timeout.
+    """
+    fim = time.time() + timeout
+    while time.time() < fim:
+        try:
+            for w in Desktop(backend="uia").windows():
+                try:
+                    if "Edge" not in (w.window_text() or ""):
+                        continue
+                    if w.rectangle().top < -10000:   # janela minimizada/fora da tela
+                        continue
+                except Exception:
+                    continue
+
+                # Procura a barra de notificação e, dentro dela, o 'Salvar'
+                try:
+                    barra = w.child_window(class_name="Frame Notification Bar")
+                    if not barra.exists(timeout=0.5):
+                        continue
+                    # SplitButton chamado 'Salvar' (a setinha de dropdown fica ao lado)
+                    salvar = barra.child_window(title="Salvar", control_type="SplitButton")
+                    if not salvar.exists(timeout=0.5):
+                        salvar = barra.child_window(title="Salvar")  # fallback sem tipo
+                    if salvar.exists(timeout=0.5):
+                        try:
+                            salvar.invoke()           # aciona sem depender de posição
+                        except Exception:
+                            salvar.click_input()      # fallback: clique no centro do controle
+                        logging.info("✅ 'Salvar' (barra de download) acionado via acessibilidade")
+                        return True
+                except Exception:
+                    continue
+        except Exception as e:
+            logging.debug(f"UIA varrendo janelas: {e}")
+        time.sleep(1)
+    return False
+
+
+def confirmar_download(metodo="uia"):
     """
     Confirma o 'Salvar' da barra de download.
-      metodo='ia'      -> IA localiza e clica o botão (fallback)
-      metodo='teclado' -> determinístico: Alt+Shift+S na barra de notificação
-                          do IE-mode (não depende de pixel/resolução).
+      metodo='uia'     -> DETERMINÍSTICO: clica o SplitButton 'Salvar' da barra
+                          de notificação por acessibilidade (recomendado).
+      metodo='ia'      -> IA localiza e clica por coordenada (fallback).
+      metodo='teclado' -> Alt+Shift+S (instável neste ambiente; evitar).
     """
     time.sleep(2)
+
+    if metodo == "uia":
+        logging.info("🎯 Confirmando download (Salvar) via acessibilidade...")
+        if _clicar_salvar_uia():
+            return
+        logging.warning("   barra 'Salvar' não encontrada via UIA; caindo pra IA")
 
     if metodo == "teclado":
         logging.info("⌨️ Confirmando download via teclado (Alt+Shift+S)...")
@@ -190,14 +246,14 @@ def _confirmar_e_aguardar_arquivo(extensao, tentativas=3, espera_por_tentativa=4
     Confirma o 'Salvar' e espera o arquivo aparecer. Se não vier dentro de
     `espera_por_tentativa` segundos, RE-confirma e espera de novo.
 
-    Método principal: TECLADO (Alt+Shift+S) — determinístico, não depende de
-    pixel nem da IA. A última tentativa cai pra IA só como rede de segurança.
-    Orçamento total ≈ tentativas * espera_por_tentativa (≈120s).
+    Método principal: UIA (acessibilidade) — clica o SplitButton 'Salvar' da
+    barra de notificação pelo nome, sem pixel/IA. A última tentativa cai pra IA
+    só como rede de segurança. Orçamento total ≈ tentativas * espera_por_tentativa.
 
     Retorna o nome do arquivo baixado, ou None se esgotar as tentativas.
     """
-    # teclado nas primeiras, IA na última como fallback
-    metodos = ["teclado"] * (tentativas - 1) + ["ia"] if tentativas > 1 else ["teclado"]
+    # UIA nas primeiras, IA na última como fallback
+    metodos = ["uia"] * (tentativas - 1) + ["ia"] if tentativas > 1 else ["uia"]
     for i in range(1, tentativas + 1):
         metodo = metodos[i - 1]
         logging.info(f"💾 Confirmação de download — tentativa {i}/{tentativas} (via {metodo})")
