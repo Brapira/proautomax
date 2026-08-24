@@ -77,7 +77,55 @@ def _clicar_salvar_uia(timeout=20) -> bool:
     return False
 
 
-def confirmar_download(metodo="uia"):
+def fechar_barra_download(timeout=5) -> bool:
+    """
+    Fecha a barra de download do EDGE MODERNO ('Download concluído', com
+    'Abrir pasta' / 'Fechar downloads') que fica na moldura do navegador após
+    o arquivo baixar. Se não for fechada, ela sobra na tela e confunde a
+    detecção de estado da PRÓXIMA rotina (ela fica presa em 'download_salvar').
+
+    Usa acessibilidade (UIA) pra clicar em 'Fechar downloads'. Não é fatal:
+    se não achar, só loga e segue.
+    """
+    fim = time.time() + timeout
+    while time.time() < fim:
+        try:
+            for w in Desktop(backend="uia").windows():
+                try:
+                    if "Edge" not in (w.window_text() or ""):
+                        continue
+                    if w.rectangle().top < -10000:
+                        continue
+                except Exception:
+                    continue
+                try:
+                    botoes = w.descendants(control_type="Button")
+                except Exception:
+                    continue
+                for b in botoes:
+                    try:
+                        nome = (b.element_info.name or "").lower()
+                    except Exception:
+                        continue
+                    # botão específico da barra de download concluído
+                    if "fechar" in nome and "download" in nome:
+                        try:
+                            b.invoke()
+                        except Exception:
+                            try:
+                                b.click_input()
+                            except Exception:
+                                continue
+                        logging.info("🧹 Barra de download do Edge fechada")
+                        return True
+        except Exception as e:
+            logging.debug(f"UIA (fechar barra): {e}")
+        time.sleep(0.5)
+    logging.debug("Barra de download não encontrada pra fechar (ok, pode não estar visível)")
+    return False
+
+
+
     """
     Confirma o 'Salvar' da barra de download.
       metodo='uia'     -> DETERMINÍSTICO: clica o SplitButton 'Salvar' da barra
@@ -338,6 +386,12 @@ def salvar_arquivo(destino, nome_arquivo, extensao_download=None):
     # Move o arquivo
     if mover_arquivo_com_retry(origem, caminho_final):
         logging.info(f"✓ Arquivo salvo com sucesso!")
+        # Fecha a barra de download do Edge pra não sobrar na tela e confundir
+        # a detecção de estado da próxima rotina.
+        try:
+            fechar_barra_download()
+        except Exception as e:
+            logging.debug(f"fechar_barra_download: {e}")
         return caminho_final
     else:
         raise Exception("Não foi possível mover o arquivo para o destino")
