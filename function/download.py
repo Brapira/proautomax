@@ -23,17 +23,18 @@ PASTA_DOWNLOADS =  os.getenv("PATH_USER") #str(Path.home() / "Downloads")
 DOWNLOAD_AUTOMATICO = os.getenv("DOWNLOAD_AUTOMATICO", "false").lower() in ("1", "true", "sim", "yes")
 
 
-def _clicar_salvar_uia(timeout=15) -> bool:
+def _clicar_salvar_uia(timeout=20) -> bool:
     """
-    Clica no botão 'Salvar' da barra de download do IE-mode por ACESSIBILIDADE.
+    Clica no 'Salvar' da barra de download do IE-mode por ACESSIBILIDADE.
 
     Estrutura descoberta na VM:
-        Pane  class='Frame Notification Bar'
-          ToolBar name='Notificação' class='DirectUIHWND'
-            SplitButton name='Salvar'   ← alvo (é SplitButton, não Button!)
+        Pane class='Frame Notification Bar' (rect embaixo, ~top 990)
+          ToolBar name='Notificação'
+            SplitButton name='Salvar'   ← alvo
 
-    Não usa pixel/IA/atalho — acha o controle pelo nome e invoca. Determinístico.
-    Retorna True se clicou, False se não achou a barra dentro do timeout.
+    Estratégia robusta: varre os descendentes das janelas do Edge procurando
+    controles chamados 'Salvar' e escolhe o que está EMBAIXO (top alto) — assim
+    não confunde com o 'Salvar' do TOPO do relatório (top ~141).
     """
     fim = time.time() + timeout
     while time.time() < fim:
@@ -42,29 +43,34 @@ def _clicar_salvar_uia(timeout=15) -> bool:
                 try:
                     if "Edge" not in (w.window_text() or ""):
                         continue
-                    if w.rectangle().top < -10000:   # janela minimizada/fora da tela
+                    if w.rectangle().top < -10000:   # minimizada/fora da tela
                         continue
                 except Exception:
                     continue
 
-                # Procura a barra de notificação e, dentro dela, o 'Salvar'
                 try:
-                    barra = w.child_window(class_name="Frame Notification Bar")
-                    if not barra.exists(timeout=0.5):
-                        continue
-                    # SplitButton chamado 'Salvar' (a setinha de dropdown fica ao lado)
-                    salvar = barra.child_window(title="Salvar", control_type="SplitButton")
-                    if not salvar.exists(timeout=0.5):
-                        salvar = barra.child_window(title="Salvar")  # fallback sem tipo
-                    if salvar.exists(timeout=0.5):
-                        try:
-                            salvar.invoke()           # aciona sem depender de posição
-                        except Exception:
-                            salvar.click_input()      # fallback: clique no centro do controle
-                        logging.info("✅ 'Salvar' (barra de download) acionado via acessibilidade")
-                        return True
+                    candidatos = w.descendants(title="Salvar")
                 except Exception:
                     continue
+
+                for c in candidatos:
+                    try:
+                        r = c.rectangle()
+                        ctype = getattr(c.element_info, "control_type", "")
+                    except Exception:
+                        continue
+                    # Só o da barra de download (metade de baixo da tela).
+                    # O 'Salvar' do relatório fica no topo (top pequeno) e é ignorado.
+                    if ctype in ("SplitButton", "Button") and r.top > 800:
+                        try:
+                            c.invoke()
+                        except Exception:
+                            try:
+                                c.click_input()
+                            except Exception:
+                                continue
+                        logging.info(f"✅ 'Salvar' da barra de download acionado via acessibilidade (top={r.top})")
+                        return True
         except Exception as e:
             logging.debug(f"UIA varrendo janelas: {e}")
         time.sleep(1)
