@@ -76,25 +76,38 @@ CRITICA_DIR    = os.getenv("CRITICA_DIR", r"C:\ProAutoCritica")
 CRITICA_PYTHON = os.getenv("CRITICA_PYTHON", PYTHON_BIN)  # venv próprio da crítica
 CRITICA_SCRIPT = os.getenv("CRITICA_SCRIPT", "main.py")
 
+# Config da Cora (corautomax — projeto Node/Playwright SEPARADO)
+CORA_DIR    = os.getenv("CORA_DIR", r"C:\Users\Macros\Desktop\Automacao\corautomax")
+CORA_NODE   = os.getenv("CORA_NODE", "node")
+CORA_SCRIPT = os.getenv("CORA_SCRIPT", "index.js")
+
 # Mapa periodo -> configuração do job.
-#   script/cwd/python : o que rodar e onde
-#   args              : argumentos de linha de comando
-#   sync_json         : nome do JSON de rotinas a sincronizar do painel (None = não sincroniza)
-#   parser            : formato de log/resumo ("proautomax" ou "critica")
+#   script/cwd/bin : o que rodar, onde e com qual executável (python, node...)
+#   args           : argumentos de linha de comando
+#   rotinas_args   : passa a lista 'rotinas' da run como argumentos do script
+#   sync_json      : nome do JSON de rotinas a sincronizar do painel (None = não sincroniza)
+#   parser         : formato de log/resumo ("proautomax", "critica" ou "cora")
 JOBS = {
     "manha": {
-        "script": SCRIPT_MANHA, "cwd": PROJECT_DIR, "python": PYTHON_BIN,
+        "script": SCRIPT_MANHA, "cwd": PROJECT_DIR, "bin": PYTHON_BIN,
         "args": [], "sync_json": JSON_MANHA, "parser": "proautomax",
     },
     "tarde": {
-        "script": SCRIPT_TARDE, "cwd": PROJECT_DIR, "python": PYTHON_BIN,
+        "script": SCRIPT_TARDE, "cwd": PROJECT_DIR, "bin": PYTHON_BIN,
         "args": [], "sync_json": JSON_TARDE, "parser": "proautomax",
     },
     # Crítica: 1 ciclo por run (--runs 1). O intercalar da tarde vem da ORDEM
     # de enfileiramento na fila, não de encadeamento interno.
     "critica": {
-        "script": CRITICA_SCRIPT, "cwd": CRITICA_DIR, "python": CRITICA_PYTHON,
+        "script": CRITICA_SCRIPT, "cwd": CRITICA_DIR, "bin": CRITICA_PYTHON,
         "args": ["--runs", "1"], "sync_json": None, "parser": "critica",
+    },
+    # Cora: relatórios do Cora (critica, pedidos_mes...). A lista 'rotinas' da
+    # run vira argumento (node index.js critica); sem lista roda os ativos do
+    # config.json da corautomax.
+    "cora": {
+        "script": CORA_SCRIPT, "cwd": CORA_DIR, "bin": CORA_NODE,
+        "args": [], "rotinas_args": True, "sync_json": None, "parser": "cora",
     },
 }
 
@@ -179,11 +192,25 @@ _RE_LINHA_PROAUTOMAX = re.compile(r"^.*?\|\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)
 _RE_LINHA_CRITICA = re.compile(
     r"^\[\d{1,2}:\d{2}:\d{2}\]\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s+\S+:\s*(.*)$"
 )
+# Cora: "[HH:MM:SS] message" (sem nível; deduzido pelo texto)
+_RE_LINHA_CORA = re.compile(r"^\[\d{1,2}:\d{2}:\d{2}\]\s*(.*)$")
+
+
+def _parse_linha_cora(linha: str):
+    m = _RE_LINHA_CORA.match(linha)
+    msg = m.group(1) if m else linha
+    if re.search(r"falhou|falha no login|nao encontrado", msg, re.IGNORECASE):
+        return "ERROR", msg
+    if re.search(r"recusou", msg, re.IGNORECASE):
+        return "WARNING", msg
+    return "INFO", msg
 
 
 def parse_linha(linha: str, parser: str = "proautomax"):
     """Devolve (nivel, mensagem). Linhas fora do formato viram INFO cru."""
     linha = linha.rstrip("\n").rstrip("\r")
+    if parser == "cora":
+        return _parse_linha_cora(linha)
     regex = _RE_LINHA_CRITICA if parser == "critica" else _RE_LINHA_PROAUTOMAX
     m = regex.match(linha)
     if m:
@@ -216,6 +243,8 @@ def parse_resumo(mensagens: list[str], parser: str = "proautomax") -> dict:
     """Escolhe o parser certo conforme o job."""
     if parser == "critica":
         return _parse_resumo_critica(mensagens)
+    if parser == "cora":
+        return _parse_resumo_cora(mensagens)
     return _parse_resumo_proautomax(mensagens)
 
 
@@ -276,6 +305,29 @@ def _parse_resumo_critica(mensagens: list[str]) -> dict:
         res["qtd_ignoradas"] = int(m.group(2))
         res["qtd_erros"]     = int(m.group(3))
         res["completou"]     = True
+    return res
+
+
+def _parse_resumo_cora(mensagens: list[str]) -> dict:
+    """
+    Resumo da corautomax (última linha do index.js):
+        RESULTADO: [{"nome": "critica", "sucesso": true, ...}, ...]
+    salvas = relatórios com sucesso, erros = relatórios que falharam. Sem custo de IA.
+    """
+    res = _resumo_vazio()
+    for msg in reversed(mensagens):
+        if not msg.startswith("RESULTADO:"):
+            continue
+        try:
+            resultados = json.loads(msg[len("RESULTADO:"):].strip())
+        except Exception:
+            break
+        res["salvas"] = [r.get("nome") for r in resultados if r.get("sucesso")]
+        res["erros"]  = [r.get("nome") for r in resultados if not r.get("sucesso")]
+        res["qtd_salvas"] = len(res["salvas"])
+        res["qtd_erros"]  = len(res["erros"])
+        res["completou"]  = True
+        break
     return res
 
 
@@ -437,8 +489,10 @@ def executar_run(run: dict):
 
     script = job["script"]
     cwd    = job["cwd"]
-    python = job["python"]
-    args   = job.get("args", [])
+    binario = job["bin"]
+    args   = list(job.get("args", []))
+    if job.get("rotinas_args") and isinstance(run.get("rotinas"), list):
+        args += [str(r) for r in run["rotinas"]]
 
     log_console(f"▶ iniciando run {run_id} (periodo={periodo}, script={script}, cwd={cwd})")
     emite("INFO", f"🤖 Agente iniciou a execução ({periodo}) — {script} {' '.join(args)}".strip())
@@ -486,7 +540,7 @@ def executar_run(run: dict):
 
     try:
         proc = subprocess.Popen(
-            [python, script, *args],
+            [binario, script, *args],
             cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,   # junta stderr (traceback) no mesmo fluxo
@@ -623,7 +677,8 @@ def loop_agendador():
                     disparados.discard(chave)
 
             for ag in ags:
-                dias = ag.get("dias_semana") or []
+                # o painel grava Dom como 0 (Date.getDay); aqui Dom é 7
+                dias = [7 if d == 0 else d for d in (ag.get("dias_semana") or [])]
                 if dia_atual not in dias:
                     continue
 
