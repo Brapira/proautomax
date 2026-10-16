@@ -7,6 +7,7 @@ import logging
 import os
 import time
 import shutil
+from collections import deque
 from pywinauto.keyboard import send_keys
 from pywinauto import Desktop
 from dotenv import load_dotenv
@@ -22,6 +23,75 @@ PASTA_DOWNLOADS =  os.getenv("PATH_USER") #str(Path.home() / "Downloads")
 # Aí o robô pula o passo do 'Salvar' (que a IA erra) e só espera o arquivo cair.
 DOWNLOAD_AUTOMATICO = os.getenv("DOWNLOAD_AUTOMATICO", "false").lower() in ("1", "true", "sim", "yes")
 
+# Instante em que a rotina atual começou (marcado pelo executor). Só aceitamos
+# arquivos criados/modificados DEPOIS disso — senão um arquivo velho que sobrou
+# em Downloads (ex.: falha ao mover) seria salvo como se fosse o da rotina atual.
+_inicio_rotina: float | None = None
+# Folga p/ granularidade do timestamp do sistema de arquivos
+_FOLGA_TIMESTAMP = 2.0
+
+
+def marcar_inicio_rotina():
+    """Chamar antes de cada rotina, antes de ela disparar o download."""
+    global _inicio_rotina
+    _inicio_rotina = time.time()
+
+
+# Classes UIA que hospedam o CONTEÚDO da página (relatório do Promax / web).
+# Não descemos nelas: além de lento (milhares de nós), é lá que fica o 'Salvar'
+# do relatório, que não é o que queremos. A barra de download e os botões do
+# Edge ficam na moldura, fora dessas classes.
+_CLASSES_CONTEUDO = {"Internet Explorer_Server", "Chrome_RenderWidgetHostHWND"}
+
+
+def _janelas_edge():
+    """Janelas de topo do Edge visíveis (não minimizadas)."""
+    janelas = []
+    try:
+        for w in Desktop(backend="uia").windows():
+            try:
+                if "Edge" not in (w.window_text() or ""):
+                    continue
+                if w.rectangle().top < -10000:   # minimizada/fora da tela
+                    continue
+                janelas.append(w)
+            except Exception:
+                continue
+    except Exception as e:
+        logging.debug(f"UIA listando janelas: {e}")
+    return janelas
+
+
+def _iter_controles_moldura(raiz, fim, max_nos=3000):
+    """
+    Percorre (em largura) os controles UIA de `raiz` SEM entrar no conteúdo da
+    página. Para no prazo `fim` ou após `max_nos` nós, pra nunca estourar o timeout.
+    """
+    fila = deque([raiz])
+    vistos = 0
+    while fila and vistos < max_nos and time.time() < fim:
+        el = fila.popleft()
+        vistos += 1
+        yield el
+        try:
+            if el.element_info.class_name in _CLASSES_CONTEUDO:
+                continue
+            fila.extend(el.children())
+        except Exception:
+            continue
+
+
+def _acionar(controle) -> bool:
+    try:
+        controle.invoke()
+        return True
+    except Exception:
+        try:
+            controle.click_input()
+            return True
+        except Exception:
+            return False
+
 
 def _clicar_salvar_uia(timeout=20) -> bool:
     """
@@ -32,47 +102,29 @@ def _clicar_salvar_uia(timeout=20) -> bool:
           ToolBar name='Notificação'
             SplitButton name='Salvar'   ← alvo
 
-    Estratégia robusta: varre os descendentes das janelas do Edge procurando
-    controles chamados 'Salvar' e escolhe o que está EMBAIXO (top alto) — assim
-    não confunde com o 'Salvar' do TOPO do relatório (top ~141).
+    Varre só a moldura do Edge (não entra no conteúdo da página, ver
+    _CLASSES_CONTEUDO) e, por segurança, só aceita um 'Salvar' na parte de
+    BAIXO da janela (proporcional ao tamanho dela, independe da resolução).
     """
     fim = time.time() + timeout
     while time.time() < fim:
-        try:
-            for w in Desktop(backend="uia").windows():
+        for w in _janelas_edge():
+            try:
+                wr = w.rectangle()
+                limite = wr.top + wr.height() * 0.6
+            except Exception:
+                continue
+            for c in _iter_controles_moldura(w, fim):
                 try:
-                    if "Edge" not in (w.window_text() or ""):
+                    info = c.element_info
+                    if info.name != "Salvar" or info.control_type not in ("SplitButton", "Button"):
                         continue
-                    if w.rectangle().top < -10000:   # minimizada/fora da tela
-                        continue
+                    r = c.rectangle()
                 except Exception:
                     continue
-
-                try:
-                    candidatos = w.descendants(title="Salvar")
-                except Exception:
-                    continue
-
-                for c in candidatos:
-                    try:
-                        r = c.rectangle()
-                        ctype = getattr(c.element_info, "control_type", "")
-                    except Exception:
-                        continue
-                    # Só o da barra de download (metade de baixo da tela).
-                    # O 'Salvar' do relatório fica no topo (top pequeno) e é ignorado.
-                    if ctype in ("SplitButton", "Button") and r.top > 800:
-                        try:
-                            c.invoke()
-                        except Exception:
-                            try:
-                                c.click_input()
-                            except Exception:
-                                continue
-                        logging.info(f"✅ 'Salvar' da barra de download acionado via acessibilidade (top={r.top})")
-                        return True
-        except Exception as e:
-            logging.debug(f"UIA varrendo janelas: {e}")
+                if r.top > limite and _acionar(c):
+                    logging.info(f"✅ 'Salvar' da barra de download acionado via acessibilidade (top={r.top})")
+                    return True
         time.sleep(1)
     return False
 
@@ -89,37 +141,19 @@ def fechar_barra_download(timeout=5) -> bool:
     """
     fim = time.time() + timeout
     while time.time() < fim:
-        try:
-            for w in Desktop(backend="uia").windows():
+        for w in _janelas_edge():
+            for b in _iter_controles_moldura(w, fim):
                 try:
-                    if "Edge" not in (w.window_text() or ""):
+                    info = b.element_info
+                    if info.control_type != "Button":
                         continue
-                    if w.rectangle().top < -10000:
-                        continue
+                    nome = (info.name or "").lower()
                 except Exception:
                     continue
-                try:
-                    botoes = w.descendants(control_type="Button")
-                except Exception:
-                    continue
-                for b in botoes:
-                    try:
-                        nome = (b.element_info.name or "").lower()
-                    except Exception:
-                        continue
-                    # botão específico da barra de download concluído
-                    if "fechar" in nome and "download" in nome:
-                        try:
-                            b.invoke()
-                        except Exception:
-                            try:
-                                b.click_input()
-                            except Exception:
-                                continue
-                        logging.info("🧹 Barra de download do Edge fechada")
-                        return True
-        except Exception as e:
-            logging.debug(f"UIA (fechar barra): {e}")
+                # botão específico da barra de download concluído
+                if "fechar" in nome and "download" in nome and _acionar(b):
+                    logging.info("🧹 Barra de download do Edge fechada")
+                    return True
         time.sleep(0.5)
     logging.debug("Barra de download não encontrada pra fechar (ok, pode não estar visível)")
     return False
@@ -159,11 +193,21 @@ def confirmar_download(metodo="uia"):
     logging.info("🎯 Continuando execução...")
 
 
-def aguardar_novo_arquivo(timeout=120, extensao=".inf"):
+def _timestamp(caminho) -> float:
+    # ctime no Windows = criação; mtime pode vir preservado se o arquivo foi movido
+    return max(os.path.getmtime(caminho), os.path.getctime(caminho))
+
+
+def aguardar_novo_arquivo(timeout=120, extensao=".inf", desde=None):
+    """
+    Espera um arquivo `extensao` em Downloads. Se `desde` for dado, ignora
+    arquivos com timestamp anterior (sobras de downloads antigos).
+    """
     logging.info(f"⏳ Aguardando arquivo {extensao.upper()}...")
     logging.info(f"📂 Monitorando: {PASTA_DOWNLOADS}")
 
     inicio = time.time()
+    corte = (desde - _FOLGA_TIMESTAMP) if desde else None
     ultimo_log = 0
 
     while time.time() - inicio < timeout:
@@ -173,6 +217,7 @@ def aguardar_novo_arquivo(timeout=120, extensao=".inf"):
                 if f.lower().endswith(extensao.lower())
                 and not f.endswith((".crdownload", ".tmp", ".partial"))
                 and os.path.isfile(os.path.join(PASTA_DOWNLOADS, f))
+                and (corte is None or _timestamp(os.path.join(PASTA_DOWNLOADS, f)) >= corte)
             ]
 
             if arquivos:
@@ -295,7 +340,7 @@ def mover_arquivo_com_retry(origem, destino, max_tentativas=5):
     return False
 
 
-def _confirmar_e_aguardar_arquivo(extensao, tentativas=3, espera_por_tentativa=40):
+def _confirmar_e_aguardar_arquivo(extensao, desde, tentativas=3, espera_por_tentativa=40):
     """
     Confirma o 'Salvar' e espera o arquivo aparecer. Se não vier dentro de
     `espera_por_tentativa` segundos, RE-confirma e espera de novo.
@@ -317,7 +362,7 @@ def _confirmar_e_aguardar_arquivo(extensao, tentativas=3, espera_por_tentativa=4
             logging.warning(f"   confirmar_download falhou: {e}")
 
         try:
-            return aguardar_novo_arquivo(timeout=espera_por_tentativa, extensao=extensao)
+            return aguardar_novo_arquivo(timeout=espera_por_tentativa, extensao=extensao, desde=desde)
         except TimeoutError:
             logging.warning(
                 f"   ⏱️ arquivo não apareceu em {espera_por_tentativa}s — "
@@ -346,19 +391,21 @@ def salvar_arquivo(destino, nome_arquivo, extensao_download=None):
     logging.info("💾 Iniciando salvamento...")
 
     extensao = extensao_download or ".inf"
+    # Sem marca do executor (chamada avulsa), vale só o que surgir daqui pra frente
+    desde = _inicio_rotina or time.time()
 
     if DOWNLOAD_AUTOMATICO:
         # Edge baixa sem perguntar — não há botão 'Salvar' pra clicar.
         # Só esperamos o arquivo aparecer na pasta monitorada.
         logging.info("⚡ Modo download automático (sem 'Salvar') — aguardando arquivo...")
         try:
-            arquivo_baixado = aguardar_novo_arquivo(timeout=120, extensao=extensao)
+            arquivo_baixado = aguardar_novo_arquivo(timeout=120, extensao=extensao, desde=desde)
         except TimeoutError as e:
             logging.error(f"❌ {e}")
             raise Exception("Timeout: arquivo não foi baixado")
     else:
-        # Modo antigo: confirma o 'Salvar' (via IA), re-tentando se não vier.
-        arquivo_baixado = _confirmar_e_aguardar_arquivo(extensao)
+        # Confirma o 'Salvar' (UIA, IA de fallback), re-tentando se não vier.
+        arquivo_baixado = _confirmar_e_aguardar_arquivo(extensao, desde)
         if not arquivo_baixado:
             raise Exception("Timeout: arquivo não foi baixado")
     

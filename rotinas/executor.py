@@ -16,7 +16,7 @@ import traceback
 from datetime import date, timedelta
 
 import pyautogui
-from function.download import salvar_arquivo
+from function.download import salvar_arquivo, marcar_inicio_rotina
 from function.data_func import ano_vigente, gerar_nome_mes_vigente, data_ontem_nome
 from function.ai_vision import diagnosticar_e_decidir, relatorio_uso_tokens
 from function.teams_notify import notificar_inicio, notificar_fim, notificar_erro_critico
@@ -114,6 +114,7 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
         try:
             # 1. Executa a rotina (navega e gera o relatório)
             logging.info("📤 Executando rotina...")
+            marcar_inicio_rotina()
             resultado = rotinas_registradas[codigo](
                 driver,
                 _destino=destino,
