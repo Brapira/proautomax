@@ -12,4 +12,5 @@ timeout*.png
 # Capturas de trafego (contem dados de clientes/sessao) e saida da POC HTTP
 *_Full.txt
 *.saz
-poc_http/saida/
+promax_http/saida/
+promax_http/inspecao/

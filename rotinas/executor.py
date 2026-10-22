@@ -10,20 +10,15 @@ Mudanças em relação à versão anterior:
 import json
 import logging
 import os
-import re
 import time
 import traceback
-from datetime import date, timedelta
 
 import pyautogui
+from function import capturar_form
+from function.config_rotinas import pular_hoje, resolver_item
 from function.download import salvar_arquivo, marcar_inicio_rotina
-from function.data_func import ano_vigente, gerar_nome_mes_vigente, data_ontem_nome
 from function.ai_vision import diagnosticar_e_decidir, relatorio_uso_tokens
 from function.teams_notify import notificar_inicio, notificar_fim, notificar_erro_critico
-
-
-def _resolver_caminho(caminho: str) -> str:
-    return re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), m.group(0)), caminho)
 
 
 def executar_rotinas(driver, rotinas_registradas, caminho_json):
@@ -36,6 +31,10 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
         caminho_json:         Caminho do arquivo rotinas.json
     """
     promaxPrimeiraJanela = driver.current_window_handle
+
+    # Modo de captura (CAPTURAR_FORM=1): salva o form de cada rotina pro modo HTTP
+    rotina_atual = {"codigo": ""}
+    capturar_form.instalar(driver, lambda: rotina_atual["codigo"])
 
     if not os.path.exists(caminho_json):
         logging.error(f"❌ Arquivo de configuração não encontrado: {caminho_json}")
@@ -82,25 +81,13 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
             rotinas_erros.append(codigo)
             continue
 
-        # Resolve o nome do arquivo de destino
-        params = item.get("params", {})
-        pular_domingo = params.pop("pularDomingo", False)
-        if pular_domingo and (date.today() - timedelta(days=1)).weekday() == 6:
+        if pular_hoje(item):
             logging.info(f"⏭️  [{idx}/{total}] '{codigo}' pulada — ontem foi domingo (pularDomingo=true)")
             rotinas_ignoradas.append(codigo)
             continue
 
-        if params.get("nomeMes") == "MES_ATUAL":
-            nome = f"{gerar_nome_mes_vigente()}.csv"
-        elif params.get("anoVigente") == "ANO_VIGENTE":
-            nome = f"{codigo}_{ano_vigente()}.csv"
-        else:
-            nome = item.get("nome", f"{codigo}.csv")
-
-        if "{DATA_ONTEM}" in nome:
-            nome = nome.replace("{DATA_ONTEM}", data_ontem_nome())
-
-        destino  = _resolver_caminho(item["destino"])
+        # Resolve destino e nome do arquivo
+        destino, nome, params = resolver_item(item)
         extensao_download = item.get("extensao_download")
         descricao = item.get("descricao", codigo)
 
@@ -115,6 +102,7 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
             # 1. Executa a rotina (navega e gera o relatório)
             logging.info("📤 Executando rotina...")
             marcar_inicio_rotina()
+            rotina_atual["codigo"] = codigo
             resultado = rotinas_registradas[codigo](
                 driver,
                 _destino=destino,
