@@ -9,3 +9,7 @@ logs/
 agente/.env
 agente/iniciar_agente.bat
 timeout*.png
+# Capturas de trafego (contem dados de clientes/sessao) e saida da POC HTTP
+*_Full.txt
+*.saz
+poc_http/saida/
