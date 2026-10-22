@@ -144,7 +144,7 @@ ROTINAS: dict[str, RotinaHTTP] = {
         "checkMaterial": False, "listaDeposito": "01"}, formato="salvar", validada=False),
 
     # --- 05 Estatísticas ---
-    "0512": RotinaHTTP("0512", lambda p: {"opcaoRel": "06", "idConverteHecto": True}, validada=False),
+    "0512": RotinaHTTP("0512", lambda p: {"opcaoRel": "06", "idConverteHecto": True}),
 
     # --- 12 Financeiro ---
     # opcaoRel 01/02 → Habilita() marca 'Pendências de Royalties'
@@ -155,5 +155,5 @@ ROTINAS: dict[str, RotinaHTTP] = {
     # --- 15 OBZ --- (listas = códigos concatenados com zeros à esquerda; 99/9999 = Todos)
     "150501": RotinaHTTP("150501", lambda p: {
         "idPeriodo": "A", "dtAno": ano(), "listaNbz": "99", "listaDepto": "9999",
-        "listaPacote": "9999", "listaVbz": "9999", "listaConta": "9999999999"}, validada=False),
+        "listaPacote": "9999", "listaVbz": "9999", "listaConta": "9999999999"}),
 }

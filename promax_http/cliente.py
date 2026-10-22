@@ -46,6 +46,11 @@ class PromaxErro(Exception):
     pass
 
 
+class SessaoInvalida(PromaxErro):
+    """O Promax derrubou a sessão — ele só aceita UMA sessão por usuário, então
+    outro login com o mesmo usuário (outro robô, outra máquina) invalida esta."""
+
+
 class RelatorioVazio(PromaxErro):
     """O Promax não gerou relatório (sem dados ou parâmetro recusado)."""
 
@@ -221,7 +226,7 @@ class PromaxHTTP:
     def _get(self, url, **params) -> str:
         r = self.http.get(url, params=params or None, timeout=self.timeout)
         r.raise_for_status()
-        return r.content.decode(ENCODING, errors="replace")
+        return _checar_sessao(r.content.decode(ENCODING, errors="replace"))
 
     def _post_raw(self, url, campos: dict, referer: str | None = None) -> requests.Response:
         corpo = urlencode(campos, encoding=ENCODING, errors="replace")
@@ -233,7 +238,7 @@ class PromaxHTTP:
         return r
 
     def _post(self, url, campos: dict, referer: str | None = None) -> str:
-        return self._post_raw(url, campos, referer).content.decode(ENCODING, errors="replace")
+        return _checar_sessao(self._post_raw(url, campos, referer).content.decode(ENCODING, errors="replace"))
 
     # ---------- login ----------
 
@@ -365,7 +370,7 @@ class PromaxHTTP:
         if _eh_arquivo(resp):
             logging.info(f"✅ Arquivo recebido direto ({len(resp.content)} bytes)")
             return resp.content
-        html_rel = resp.content.decode(ENCODING, errors="replace")
+        html_rel = _checar_sessao(resp.content.decode(ENCODING, errors="replace"))
 
         # Botões de download direto (e algumas rotinas) já devolvem o link
         link = _link_relatorio(html_rel)
@@ -392,6 +397,12 @@ def _eh_arquivo(resp: requests.Response) -> bool:
     disp = resp.headers.get("Content-Disposition", "").lower()
     tipo = resp.headers.get("Content-Type", "").lower()
     return "attachment" in disp or (bool(tipo) and "html" not in tipo and "json" not in tipo)
+
+
+def _checar_sessao(html: str) -> str:
+    if "Sessão inválida" in html[:3000]:
+        raise SessaoInvalida("Sessão do Promax derrubada (outro login com o mesmo usuário?)")
+    return html
 
 
 def _valor_checkbox(html: str, nome: str) -> str:
