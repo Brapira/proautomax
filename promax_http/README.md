@@ -24,6 +24,13 @@ Rotinas ainda não migradas aparecem no log e continuam no `main.py`.
 > Não use em paralelo uma conta que alguém esteja usando no Promax: o login do robô derruba a pessoa.
 > Os testes (`testar`, `inspecionar`) usam a primeira conta da lista.
 
+**Novas tentativas:** uma rotina que falha volta para o **fim da fila** e tenta de novo depois das outras,
+até `HTTP_RETENTATIVAS` vezes (padrão 2, ou seja, até 3 tentativas). "Sem dados" não tenta de novo,
+porque o Promax responderia igual.
+
+**Agendador (agente/dash):** no `agente/.env`, `SCRIPT_MANHA=main_http.py` e `SCRIPT_TARDE=main_http_tarde.py`.
+O resumo no fim do log segue o mesmo formato do `main.py`, que é o que o dash lê.
+
 ## Como funciona
 
 1. **Login:** dois envios de formulário. Na 2ª etapa, a senha já vem codificada pelo servidor.

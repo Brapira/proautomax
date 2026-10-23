@@ -63,33 +63,39 @@ class Resultado:
             getattr(self, lista).append(codigo)
 
 
-def rodar_rotina(promax: PromaxHTTP, item: dict, resultado: Resultado):
+# Quantas vezes uma rotina que falhou volta pro FIM da fila (0 = não tenta de novo)
+RETENTATIVAS = int(os.getenv("HTTP_RETENTATIVAS", "2"))
+
+
+def rodar_rotina(promax: PromaxHTTP, item: dict, tentativa: int, fila: queue.Queue,
+                 resultado: Resultado) -> bool:
+    """Roda uma rotina. Devolve False se falhou (a sessão pode estar ruim)."""
     codigo = item["codigo"]
     destino, nome, params = resolver_item(item)
-    logging.info(f"▶  {item.get('descricao', codigo)} → {nome}")
+    sufixo = f" (tentativa {tentativa}/{RETENTATIVAS + 1})" if tentativa > 1 else ""
+    logging.info(f"▶  {item.get('descricao', codigo)} → {nome}{sufixo}")
     t0 = time.time()
-    for tentativa in (1, 2):
-        try:
-            conteudo = ROTINAS[codigo].baixar(promax, params)
-            caminho = salvar(conteudo, destino, nome)
-            logging.info(f"✓ {codigo} salvo em {caminho} ({len(conteudo):,} bytes, {time.time() - t0:.0f}s)")
-            resultado.anotar("salvas", codigo)
-            return
-        except RelatorioVazio as e:
-            logging.warning(f"⏭️  {codigo} sem relatório: {e}")
-            resultado.anotar("ignoradas", codigo)
-            return
-        except Exception as e:
-            if tentativa == 1:
-                # Sessão pode ter caído (relatórios longos, outro login): loga de novo e tenta mais uma vez
-                logging.warning(f"⚠️ {codigo} falhou ({e}) — refazendo login e tentando de novo")
-                try:
-                    promax.login()
-                except Exception as e_login:
-                    logging.error(f"❌ Novo login falhou: {e_login}")
-                continue
-            logging.error(f"❌ {codigo} falhou: {e}")
+    try:
+        conteudo = ROTINAS[codigo].baixar(promax, params)
+        caminho = salvar(conteudo, destino, nome)
+        logging.info(f"✓ {codigo} salvo em {caminho} ({len(conteudo):,} bytes, {time.time() - t0:.0f}s)")
+        resultado.anotar("salvas", codigo)
+        return True
+    except RelatorioVazio as e:
+        # Resposta do Promax (sem dados / bloqueado): tentar de novo daria o mesmo
+        logging.warning(f"⏭️  {codigo} sem relatório: {e}")
+        resultado.anotar("ignoradas", codigo)
+        return True
+    except Exception as e:
+        if tentativa <= RETENTATIVAS:
+            # Vai pro fim da fila: as outras seguem e ela tenta de novo mais tarde
+            logging.warning(f"⚠️ {codigo} falhou ({e}) — volta pro fim da fila "
+                            f"(tentativa {tentativa + 1}/{RETENTATIVAS + 1})")
+            fila.put((item, tentativa + 1))
+        else:
+            logging.error(f"❌ {codigo} falhou após {tentativa} tentativa(s): {e}")
             resultado.anotar("erros", codigo)
+        return False
 
 
 def trabalhador(usuario: str, senha: str, fila: queue.Queue, resultado: Resultado):
@@ -102,10 +108,16 @@ def trabalhador(usuario: str, senha: str, fila: queue.Queue, resultado: Resultad
         return
     while True:
         try:
-            item = fila.get_nowait()
+            item, tentativa = fila.get_nowait()
         except queue.Empty:
             return
-        rodar_rotina(promax, item, resultado)
+        if not rodar_rotina(promax, item, tentativa, fila, resultado):
+            # A falha pode ter sido sessão derrubada: entra de novo antes da próxima
+            try:
+                promax.login()
+            except Exception as e:
+                logging.error(f"❌ Novo login da conta {usuario} falhou — saindo: {e}")
+                return
 
 
 def main(caminho_json: str):
@@ -132,7 +144,7 @@ def main(caminho_json: str):
     http.sort(key=lambda i: not ROTINAS[i["codigo"]].pesada)
     fila = queue.Queue()
     for item in http:
-        fila.put(item)
+        fila.put((item, 1))
 
     n = min(len(contas), len(http))
     logging.info(f"🚀 {len(http)} rotina(s) HTTP com {n} conta(s) em paralelo: {[c[0] for c in contas[:n]]}")
@@ -149,16 +161,27 @@ def main(caminho_json: str):
     # Se todos os logins falharam, a fila fica com rotinas não executadas
     sobras = []
     while not fila.empty():
-        sobras.append(fila.get_nowait()["codigo"])
+        sobras.append(fila.get_nowait()[0]["codigo"])
     if sobras:
         logging.critical(f"💀 Rotinas não executadas (nenhuma conta conseguiu logar?): {sobras}")
         notificar_erro_critico(f"main_http: rotinas não executadas — {sobras}")
         resultado.erros.extend(sobras)
 
     tempo = int(time.time() - inicio)
-    logging.info(f"📊 Salvas {resultado.salvas} | Erros {resultado.erros} | Ignoradas {resultado.ignoradas} | {tempo}s")
+    logar_resumo(resultado, tempo)
     notificar_fim(salvas=resultado.salvas, erros=resultado.erros, ignoradas=resultado.ignoradas,
                   tempo_segundos=tempo)
+
+
+def logar_resumo(resultado: Resultado, tempo: int):
+    """Mesmo formato do rotinas/executor.py — o agente (dash) lê essas linhas."""
+    logging.info("*==" * 25)
+    logging.info("📊 RESUMO DA EXECUÇÃO")
+    logging.info(f"✅ Salvas com sucesso:  {len(resultado.salvas)}  → {resultado.salvas}")
+    logging.info(f"❌ Com erro:            {len(resultado.erros)} → {resultado.erros}")
+    logging.info(f"⏭️  Ignoradas:           {len(resultado.ignoradas)} → {resultado.ignoradas}")
+    logging.info("^==" * 25)
+    logging.info(f"⏱️  Tempo total de execução: {tempo}s")
 
 
 if __name__ == "__main__":
