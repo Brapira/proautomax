@@ -25,23 +25,31 @@ from promax_http.rotinas import ROTINAS
 SAIDA = os.path.join(os.path.dirname(__file__), "saida")
 
 
-def _resumo(conteudo: bytes) -> tuple[bytes, int]:
-    linhas = conteudo.splitlines()
-    return (linhas[0].strip() if linhas else b""), len(linhas)
+def _resumo_arquivo(caminho: str) -> tuple[bytes, int]:
+    """Cabeçalho e nº de linhas lendo em blocos (arquivos de produção passam de 700 MB)."""
+    with open(caminho, "rb") as f:
+        cabecalho = f.readline().strip()
+        linhas = 1 if cabecalho else 0
+        for bloco in iter(lambda: f.read(1 << 20), b""):
+            linhas += bloco.count(b"\n")
+    return cabecalho, linhas
 
 
 def comparar(novo: bytes, caminho_prod: str) -> str:
     if not os.path.exists(caminho_prod):
         return "sem arquivo de produção pra comparar"
-    with open(caminho_prod, "rb") as f:
-        prod = f.read()
-    cab_n, lin_n = _resumo(novo)
-    cab_p, lin_p = _resumo(prod)
+    try:
+        cab_p, lin_p = _resumo_arquivo(caminho_prod)
+    except OSError as e:
+        # OneDrive com o arquivo 'só na nuvem' recusa a leitura (Errno 22)
+        return f"produção indisponível pra leitura ({e.strerror}) | bytes {len(novo)} vs {os.path.getsize(caminho_prod)}"
+    linhas_n = novo.splitlines()
+    cab_n, lin_n = (linhas_n[0].strip() if linhas_n else b""), len(linhas_n)
     idade_h = (time.time() - os.path.getmtime(caminho_prod)) / 3600
     cab = "cabeçalho IGUAL" if cab_n == cab_p else "cabeçalho DIFERENTE"
     dif = (lin_n - lin_p) / lin_p * 100 if lin_p else 0
     return (f"{cab} | linhas {lin_n} vs {lin_p} ({dif:+.1f}%) | "
-            f"bytes {len(novo)} vs {len(prod)} | produção de {idade_h:.0f}h atrás")
+            f"bytes {len(novo)} vs {os.path.getsize(caminho_prod)} | produção de {idade_h:.0f}h atrás")
 
 
 _IGNORAR = {"SessionID", "SubSessionID", "opcao", "GeraExcel", "BotVisualizar", "frame"}

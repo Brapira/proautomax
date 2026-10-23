@@ -97,8 +97,16 @@ def _baixar_030805(promax: PromaxHTTP, params: dict) -> bytes:
 # Rotinas — chave = "codigo" do rotinas.json
 # ---------------------------------------------------------------------------
 
-_030237_COMUM = {"quebra1": "14", "itens": "S"}
-_030509 = RotinaHTTP("030509", lambda p: {"opcaoRel": "07", "fatorConversao": "H"}, validada=False)
+# Campos abaixo conferidos com o que o navegador envia (promax_http/capturas/):
+# faixas e alçadas que o JS da tela preenche, e campos desabilitados (None)
+_030237_COMUM = {
+    "quebra1": "14", "itens": "S",
+    "quebra1Inicial": "0", "quebra1Final": "99999999", "quebra2Inicial": "0", "quebra2Final": "99999999",
+    "quebra3Inicial": None, "quebra3Final": None,
+}
+_030509 = RotinaHTTP("030509", lambda p: {
+    "opcaoRel": "07", "fatorConversao": "H", "consideraCarreto": True,
+    "campo1Inicial": "0", "campo1Final": "99999", "campo2Inicial": None, "campo2Final": None, "cdVisao": None})
 
 ROTINAS: dict[str, RotinaHTTP] = {
     # --- 01 Cadastramentos (botões que geram o arquivo direto) ---
@@ -112,25 +120,26 @@ ROTINAS: dict[str, RotinaHTTP] = {
     # --- 02 Controle de Estoque ---
     "020229": RotinaHTTP("020229", lambda p: {"opcaoRel": "1"}),
     "020253": RotinaHTTP("020253", lambda p: {"idClassificacao": "2"}),
-    "020304": RotinaHTTP("020304", lambda p: {"data": ontem()}, validada=False),  # 'Não existem itens'
     "020512": RotinaHTTP("020512", lambda p: {
         "vasilhame": False, "garrafeira": False, "material": False,
         "idValor": "S", "periodoInicial": primeiro_dia_ano()}),
 
     # --- 03 Movimentação Diária ---
-    # validada=False: o Promax responde 'sem dados' — falta descobrir algum campo
-    # que o JS da tela ajusta (capturar com CAPTURAR_FORM=1 e comparar)
-    "030111": RotinaHTTP("030111", lambda p: {"opcaoRel": "9"}, validada=False),
-    "03013604_CX": RotinaHTTP("03013604", validada=False),
-    "03013604_HE": RotinaHTTP("03013604", lambda p: {"idQtdeHecto": True}, validada=False),
-    "03013604_MES": RotinaHTTP("03013604", lambda p: {"dtInicial": primeiro_dia_mes()}, validada=False),
-    "03014701": RotinaHTTP("03014701", lambda p: {"quebra1": "01", "dataInicial": primeiro_dia_ano()},
-                           validada=False),
+    "03013604_MES": RotinaHTTP("03013604", lambda p: {
+        "dtInicial": primeiro_dia_mes(), "cdAlcadaInicial": "05", "cdAlcadaFinal": "90",
+        "idNormal": True, "idBloqueado": True, "idRejeitado": True, "idTransfer": True,
+        "idComandado": True, "idSistema": True, "volumePdvInicial": None, "volumePdvFinal": None}),
+    "03014701": RotinaHTTP("03014701", lambda p: {
+        "quebra1": "01", "dataInicial": primeiro_dia_ano(), "cdAlcadaInicial": "06", "cdAlcadaFinal": "07",
+        "pedidosExcluidos": True, "quebra2": None, "quebra3": None,
+        "quebra1Inicial": None, "quebra1Final": None, "quebra2Inicial": None, "quebra2Final": None,
+        "quebra3Inicial": None, "quebra3Final": None, "subMotivosInicial": None, "subMotivosFinal": None},
+        validada=False),  # campos = navegador, mas o Promax respondeu 'Não há CDP' (23/10) — conferir log da VM
     "030237_ENTRADA": RotinaHTTP("030237", lambda p: {
         **_030237_COMUM, "quebra2": "29", "notas": "NE", "listaNotaCompra": True,
-        "dataInicial": primeiro_dia_mes()}, validada=False),
+        "dataInicial": primeiro_dia_mes()}),
     "030237_SAIDA": RotinaHTTP("030237", lambda p: {
-        **_030237_COMUM, "quebra2": "06", "dataInicial": primeiro_dia_mes()}, validada=False),
+        **_030237_COMUM, "quebra2": "06", "dataInicial": primeiro_dia_mes(), "cdVisao": None}),
     "030509": _030509,
     "030509_MES": _030509,
     "030805": RotinaHTTP("030805", especial=_baixar_030805),
