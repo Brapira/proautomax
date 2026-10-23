@@ -147,11 +147,14 @@ ROTINAS: dict[str, RotinaHTTP] = {
     "031120": RotinaHTTP("031120", lambda p: {"opcaoRel": "1", "dataInicial": primeiro_dia_mes()}),
 
     # --- 04 Livros Fiscais --- (CSV desabilitado nessa tela: usa o 'Salvar')
-    # Parâmetros conferem, mas hoje o Promax devolve só a lista de 'produtos com valor
-    # negativo' (inventário bloqueado). O arquivo do Selenium é de 14/08 — decidir antes.
+    # Campos = captura do navegador, mas com listaDeposito preenchida: a tela a monta
+    # (SalvaItem) já dentro do envio, depois do ponto da captura — vazia, o Promax
+    # responde 'Não existem movimentos'. Hoje o Promax devolve só a lista de 'produtos
+    # com valor negativo' (inventário bloqueado); o arquivo do Selenium é de 14/08.
     "0421": RotinaHTTP("0421", lambda p: {
         "opcaoCusto": "3", "checkVasilhame": False, "checkGarrafeira": False,
-        "checkMaterial": False, "listaDeposito": "01"}, formato="salvar", validada=False),
+        "checkMaterial": False, "cdDepositoLista": "01", "listaDeposito": "01", "controleMensagem": "2"},
+        formato="salvar", validada=False),
 
     # --- 05 Estatísticas ---
     "0512": RotinaHTTP("0512", lambda p: {"opcaoRel": "06", "idConverteHecto": True}, pesada=True),
