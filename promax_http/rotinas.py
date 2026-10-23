@@ -12,11 +12,14 @@ Convenções dos campos:
     None     → não envia o campo
 """
 
+import logging
+import re
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Callable
 
-from promax_http.cliente import ENCODING, PromaxHTTP, RelatorioVazio, _motivo
+from promax_http.cliente import (BASE, CGI, ENCODING, PromaxErro, PromaxHTTP, RelatorioVazio,
+                                 _motivo, gerar_session_id)
 
 
 # Datas calculadas na hora (a function/data_func.py congela 'hoje' no import)
@@ -94,6 +97,41 @@ def _baixar_030805(promax: PromaxHTTP, params: dict) -> bytes:
     return r.content
 
 
+def _baixar_0105070402(promax: PromaxHTTP, params: dict) -> bytes:
+    """
+    01.05.07.04.02 (Cliente Plus) é um programa 'PH' (tela nova, em AJAX), não 'PW':
+    o MenuID vai com 10 dígitos e o CSV sai de UM pedido com ajaxJson=S, que
+    responde JSON com o caminho do arquivo em ../tmp/rels/.
+    """
+    sid = promax.session_id
+    menu = "0105070402"
+    resp = promax._post(CGI, {"SessionID": sid, "ppopcao": "6", "call": "PP00101", "opcao": "1", "MenuID": menu})
+    if '"atalho"' not in resp:
+        raise PromaxErro(f"Rotina {menu} não abriu (sem permissão?): {resp[:300]}")
+
+    sub = gerar_session_id()
+    promax._get(CGI, SessionID=sid, ppopcao="7", call=menu, SubSessionID=sub)
+    base = {"SessionID": sid, "SubSessionID": sub, "opcao": "1", "call": "PH050094", "callAux": "",
+            "lnkInc": "1", "lnkAlt": "1", "lnkExc": "1", "lnkCon": "1", "lnkEsp": "1"}
+    promax._post(CGI, {**base, "ppopcao": "", "ajaxJson": "N", "callRetorno": ""})   # carrega a tela
+
+    # Mesmos valores do navegador (captura de 23/10). flPreferencias = caixas da
+    # seção 'Preferências', na ordem da tela (1 = marcada); idAS = caixa 'AS'.
+    filtros = {"cdClienteIni": "0", "cdClienteFim": "9.999.999", "cdSetorIni": "0", "cdSetorFim": "99.999",
+               "cdCorporativoIni": "0", "cdCorporativoFim": "9.999.999.999.999",
+               "flPreferencias": "1111101000", "idRota": "S", "idAS": "S"}
+    logging.info("📤 Gerando CSV (Cliente Plus)...")
+    resp = promax._post(CGI, {**base, "ppopcao": "0", "ajaxJson": "S", "callRetorno": "PY050094", **filtros})
+    m = re.search(r'"dsCaminhoArquivoCSV"\s*:\s*"(?:\.\./)?tmp/rels/([^"]+)"', resp)
+    if not m:
+        raise RelatorioVazio(f"Cliente Plus não gerou CSV: {resp[:300]}")
+
+    r = promax.http.get(f"{BASE}/tmp/rels/{m.group(1)}", timeout=promax.timeout)
+    r.raise_for_status()
+    logging.info(f"✅ Arquivo baixado: {m.group(1)} ({len(r.content)} bytes)")
+    return r.content
+
+
 # ---------------------------------------------------------------------------
 # Rotinas — chave = "codigo" do rotinas.json
 # ---------------------------------------------------------------------------
@@ -111,6 +149,7 @@ _030509 = RotinaHTTP("030509", lambda p: {
 
 ROTINAS: dict[str, RotinaHTTP] = {
     # --- 01 Cadastramentos (botões que geram o arquivo direto) ---
+    "0105070402": RotinaHTTP("0105070402", especial=_baixar_0105070402, pesada=True),   # Cliente Plus
     "0111": RotinaHTTP("0111", opcao="9", via_quadro=True),                       # GerarCsv()
     "011501": RotinaHTTP("011501", lambda p: {"numerotabela": "1"}, opcao="12",   # GerarCsv()
                          passos=(("2", {}),), via_quadro=True),                   # CarregarTabela(1)
