@@ -169,12 +169,6 @@ ROTINAS: dict[str, RotinaHTTP] = {
         "dtInicial": primeiro_dia_mes(), "cdAlcadaInicial": "05", "cdAlcadaFinal": "90",
         "idNormal": True, "idBloqueado": True, "idRejeitado": True, "idTransfer": True,
         "idComandado": True, "idSistema": True, "volumePdvInicial": None, "volumePdvFinal": None}, pesada=True),
-    "03014701": RotinaHTTP("03014701", lambda p: {
-        "quebra1": "01", "dataInicial": primeiro_dia_ano(), "cdAlcadaInicial": "06", "cdAlcadaFinal": "07",
-        "pedidosExcluidos": True, "quebra2": None, "quebra3": None,
-        "quebra1Inicial": None, "quebra1Final": None, "quebra2Inicial": None, "quebra2Final": None,
-        "quebra3Inicial": None, "quebra3Final": None, "subMotivosInicial": None, "subMotivosFinal": None},
-        pesada=True, validada=False),  # campos = navegador, mas o Promax respondeu 'Não há CDP' (23/10) — conferir log da VM
     "030237_ENTRADA": RotinaHTTP("030237", lambda p: {
         **_030237_COMUM, "quebra2": "29", "notas": "NE", "listaNotaCompra": True,
         "dataInicial": primeiro_dia_mes()}),
