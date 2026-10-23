@@ -49,6 +49,7 @@ class RotinaHTTP:
     passos: tuple = ()                            # envios intermediários: (("2", {...}),)
     via_quadro: bool = False                      # botão usa EnviarFormulario() (telas de cadastro)
     especial: Callable[[PromaxHTTP, dict], bytes] | None = field(default=None)
+    pesada: bool = False                          # relatório grande: começa primeiro no paralelo
     validada: bool = True                         # resultado conferido com o do Selenium?
                                                   # (main_http.py só roda as validadas)
 
@@ -118,7 +119,7 @@ ROTINAS: dict[str, RotinaHTTP] = {
     "01250802": RotinaHTTP("01250802", opcao="12", via_quadro=True),              # GeraPlanilha()
 
     # --- 02 Controle de Estoque ---
-    "020229": RotinaHTTP("020229", lambda p: {"opcaoRel": "1"}),
+    "020229": RotinaHTTP("020229", lambda p: {"opcaoRel": "1"}, pesada=True),
     "020253": RotinaHTTP("020253", lambda p: {"idClassificacao": "2"}),
     "020512": RotinaHTTP("020512", lambda p: {
         "vasilhame": False, "garrafeira": False, "material": False,
@@ -128,18 +129,18 @@ ROTINAS: dict[str, RotinaHTTP] = {
     "03013604_MES": RotinaHTTP("03013604", lambda p: {
         "dtInicial": primeiro_dia_mes(), "cdAlcadaInicial": "05", "cdAlcadaFinal": "90",
         "idNormal": True, "idBloqueado": True, "idRejeitado": True, "idTransfer": True,
-        "idComandado": True, "idSistema": True, "volumePdvInicial": None, "volumePdvFinal": None}),
+        "idComandado": True, "idSistema": True, "volumePdvInicial": None, "volumePdvFinal": None}, pesada=True),
     "03014701": RotinaHTTP("03014701", lambda p: {
         "quebra1": "01", "dataInicial": primeiro_dia_ano(), "cdAlcadaInicial": "06", "cdAlcadaFinal": "07",
         "pedidosExcluidos": True, "quebra2": None, "quebra3": None,
         "quebra1Inicial": None, "quebra1Final": None, "quebra2Inicial": None, "quebra2Final": None,
         "quebra3Inicial": None, "quebra3Final": None, "subMotivosInicial": None, "subMotivosFinal": None},
-        validada=False),  # campos = navegador, mas o Promax respondeu 'Não há CDP' (23/10) — conferir log da VM
+        pesada=True, validada=False),  # campos = navegador, mas o Promax respondeu 'Não há CDP' (23/10) — conferir log da VM
     "030237_ENTRADA": RotinaHTTP("030237", lambda p: {
         **_030237_COMUM, "quebra2": "29", "notas": "NE", "listaNotaCompra": True,
         "dataInicial": primeiro_dia_mes()}),
     "030237_SAIDA": RotinaHTTP("030237", lambda p: {
-        **_030237_COMUM, "quebra2": "06", "dataInicial": primeiro_dia_mes(), "cdVisao": None}),
+        **_030237_COMUM, "quebra2": "06", "dataInicial": primeiro_dia_mes(), "cdVisao": None}, pesada=True),
     "030509": _030509,
     "030509_MES": _030509,
     "030805": RotinaHTTP("030805", especial=_baixar_030805),
@@ -153,7 +154,7 @@ ROTINAS: dict[str, RotinaHTTP] = {
         "checkMaterial": False, "listaDeposito": "01"}, formato="salvar", validada=False),
 
     # --- 05 Estatísticas ---
-    "0512": RotinaHTTP("0512", lambda p: {"opcaoRel": "06", "idConverteHecto": True}),
+    "0512": RotinaHTTP("0512", lambda p: {"opcaoRel": "06", "idConverteHecto": True}, pesada=True),
 
     # --- 12 Financeiro ---
     # opcaoRel 01/02 → Habilita() marca 'Pendências de Royalties'

@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 
 from function.config_rotinas import carregar_config, resolver_item
 from promax_http.cliente import PromaxHTTP, RelatorioVazio
+from promax_http.contas import contas_http
 from promax_http.rotinas import ROTINAS
 
 SAIDA = os.path.join(os.path.dirname(__file__), "saida")
@@ -87,8 +88,8 @@ def main(codigos: list[str]):
     itens = {i["codigo"]: i for i in carregar_config("rotinas.json")}
     codigos = codigos or [c for c in itens if c in ROTINAS]
 
-    promax = PromaxHTTP(os.environ["PROMAX_USER"], os.environ["PROMAX_PASSWORD"],
-                        unidade=os.getenv("PROMAX_UNIDADE"))
+    usuario, senha = contas_http()[0]   # conta HTTP, pra não derrubar o robô Selenium
+    promax = PromaxHTTP(usuario, senha, unidade=os.getenv("PROMAX_UNIDADE"))
     promax.login()
 
     if so_captura:

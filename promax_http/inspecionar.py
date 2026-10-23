@@ -16,6 +16,7 @@ import sys
 from dotenv import load_dotenv
 
 from promax_http.cliente import PromaxHTTP
+from promax_http.contas import contas_http
 
 PASTA = os.path.join(os.path.dirname(__file__), "inspecao")
 
@@ -29,8 +30,8 @@ def main(atalhos: list[str]):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s", datefmt="%H:%M:%S")
     os.makedirs(PASTA, exist_ok=True)
 
-    promax = PromaxHTTP(os.environ["PROMAX_USER"], os.environ["PROMAX_PASSWORD"],
-                        unidade=os.getenv("PROMAX_UNIDADE"))
+    usuario, senha = contas_http()[0]   # conta HTTP, pra não derrubar o robô Selenium
+    promax = PromaxHTTP(usuario, senha, unidade=os.getenv("PROMAX_UNIDADE"))
     promax.login()
     for atalho in atalhos:
         try:

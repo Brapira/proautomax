@@ -12,7 +12,17 @@ Ele usa o mesmo JSON do `main.py` (`ativo`, `destino`, `nome`, `params`) e grava
 Rotinas ainda não migradas aparecem no log e continuam no `main.py`.
 
 > ⚠️ **O Promax aceita uma sessão por usuário.** Um novo login derruba o anterior.
-> O `main.py` e o `main_http.py` (ou um teste) não podem rodar ao mesmo tempo com o mesmo usuário.
+> Por isso o modo HTTP usa contas próprias, diferentes da conta do robô Selenium (`PROMAX_USER`):
+>
+> ```
+> PROMAX_HTTP_CONTAS=Robo,Isac
+> PROMAX_HTTP_SENHA_Robo=...
+> PROMAX_HTTP_SENHA_Isac=...
+> ```
+>
+> Cada conta vira um trabalhador em paralelo, e as rotinas pesadas (`pesada=True`) começam primeiro.
+> Não use em paralelo uma conta que alguém esteja usando no Promax: o login do robô derruba a pessoa.
+> Os testes (`testar`, `inspecionar`) usam a primeira conta da lista.
 
 ## Como funciona
 
