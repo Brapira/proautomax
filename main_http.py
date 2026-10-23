@@ -120,8 +120,12 @@ def trabalhador(usuario: str, senha: str, fila: queue.Queue, resultado: Resultad
                 return
 
 
+RAIZ = os.path.dirname(os.path.abspath(__file__))
+
+
 def main(caminho_json: str):
-    load_dotenv()
+    # Caminho explícito: o agente pode chamar o script de outro diretório
+    load_dotenv(os.path.join(RAIZ, ".env"))
     configurar_log()
 
     itens = [i for i in carregar_config(caminho_json) if i.get("ativo", True)]
@@ -140,6 +144,7 @@ def main(caminho_json: str):
         return
 
     contas = contas_http()
+    logging.info(f"👥 Contas HTTP: {[c[0] for c in contas]}")
     # Pesadas primeiro: com N contas, as grandes rodam em paralelo desde o início
     http.sort(key=lambda i: not ROTINAS[i["codigo"]].pesada)
     fila = queue.Queue()

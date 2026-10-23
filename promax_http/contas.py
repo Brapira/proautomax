@@ -20,7 +20,8 @@ import os
 def contas_http() -> list[tuple[str, str]]:
     nomes = [n.strip() for n in os.getenv("PROMAX_HTTP_CONTAS", "").split(",") if n.strip()]
     if not nomes:
-        logging.warning("⚠️ PROMAX_HTTP_CONTAS não definido — usando PROMAX_USER (a mesma conta do robô Selenium)")
+        logging.warning("⚠️ PROMAX_HTTP_CONTAS não encontrado no .env do projeto — usando só PROMAX_USER "
+                        f"({os.getenv('PROMAX_USER')}), sem paralelo")
         return [(os.environ["PROMAX_USER"], os.environ["PROMAX_PASSWORD"])]
 
     contas = []
