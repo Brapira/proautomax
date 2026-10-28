@@ -160,9 +160,10 @@ ROTINAS: dict[str, RotinaHTTP] = {
     # --- 02 Controle de Estoque ---
     "020229": RotinaHTTP("020229", lambda p: {"opcaoRel": "1"}, pesada=True),
     "020253": RotinaHTTP("020253", lambda p: {"idClassificacao": "2"}),
+    # produto/idConversao: o JS da tela marca ao abrir; filaimpressao: o Visualizar() zera
     "020512": RotinaHTTP("020512", lambda p: {
-        "vasilhame": False, "garrafeira": False, "material": False,
-        "idValor": "S", "periodoInicial": primeiro_dia_ano()}),
+        "vasilhame": False, "garrafeira": False, "material": False, "produto": True,
+        "idConversao": "H", "filaimpressao": "0", "idValor": "S", "periodoInicial": primeiro_dia_ano()}),
 
     # --- 03 Movimentação Diária ---
     "03013604_MES": RotinaHTTP("03013604", lambda p: {
