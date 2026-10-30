@@ -102,12 +102,13 @@ def main(codigos: list[str]):
         logging.info(f"===== {codigo} =====")
         inicio = time.time()
         try:
-            item = itens[codigo]
-            destino, nome, params = resolver_item(item)
+            # Rotina nova, ainda não cadastrada no dash: baixa sem comparar
+            destino, nome, params = resolver_item(itens[codigo]) if codigo in itens else (None, f"{codigo}.csv", {})
             conteudo = ROTINAS[codigo].baixar(promax, params)
             with open(os.path.join(SAIDA, f"{codigo}__{nome}"), "wb") as f:
                 f.write(conteudo)
-            resultados[codigo] = f"OK {time.time() - inicio:.0f}s | " + comparar(conteudo, os.path.join(destino, nome))
+            resultados[codigo] = f"OK {time.time() - inicio:.0f}s | " + (
+                comparar(conteudo, os.path.join(destino, nome)) if destino else "fora do rotinas.json, sem comparação")
         except RelatorioVazio as e:
             resultados[codigo] = f"VAZIO {e}"
         except Exception as e:

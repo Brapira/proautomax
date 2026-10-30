@@ -170,6 +170,14 @@ ROTINAS: dict[str, RotinaHTTP] = {
         "dtInicial": primeiro_dia_mes(), "cdAlcadaInicial": "05", "cdAlcadaFinal": "90",
         "idNormal": True, "idBloqueado": True, "idRejeitado": True, "idTransfer": True,
         "idComandado": True, "idSistema": True, "volumePdvInicial": None, "volumePdvFinal": None}, pesada=True),
+    # Devoluções. Desde 2000 de propósito: o Promax já limita aos últimos meses, e
+    # assim o início do mês não fica só com os dias do mês corrente
+    "030224": RotinaHTTP("030224", lambda p: {
+        "opcaoRel": "03", "setoresInativos": "S", "converte": "H", "resumoVisao": "N",
+        "selecionouROTA": "S", "resumo": "S", "idVisaoMultiCdd": "C", "idSelecaoMultiCdd": "T",
+        "dataInicial": "01/01/2000", "dataFinal": hoje().strftime("%d/%m/%Y"),
+        "campoInicial": "0", "campoFinal": "999999", "nrRoadInicial": "0", "nrRoadFinal": "99",
+        "classeInicial": "", "classeFinal": "z"}),
     "030237_ENTRADA": RotinaHTTP("030237", lambda p: {
         **_030237_COMUM, "quebra2": "29", "notas": "NE", "listaNotaCompra": True,
         "dataInicial": primeiro_dia_mes()}),
