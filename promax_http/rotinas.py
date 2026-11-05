@@ -187,6 +187,11 @@ ROTINAS: dict[str, RotinaHTTP] = {
     "030509_MES": _030509,
     "030805": RotinaHTTP("030805", especial=_baixar_030805),
     "031120": RotinaHTTP("031120", lambda p: {"opcaoRel": "1", "dataInicial": primeiro_dia_mes()}),
+    # Campos da captura do navegador: rt*h = faixa de rota que o JS monta; o resto vai desabilitado
+    "031120_ANO": RotinaHTTP("031120", lambda p: {
+        "opcaoRel": "1", "dataInicial": primeiro_dia_ano(),
+        "rtInicialh": "0" * 20, "rtFinalh": "9" * 20, "rtInicial": None, "rtFinal": None,
+        "codArmazem": None, "idMostrarCnfCega": None, "idMostrarUltFase": None}),
 
     # --- 04 Livros Fiscais --- (CSV desabilitado nessa tela: usa o 'Salvar')
     # Campos = captura do navegador, mas com listaDeposito preenchida: a tela a monta
@@ -206,6 +211,10 @@ ROTINAS: dict[str, RotinaHTTP] = {
     "120601": RotinaHTTP("120601", lambda p: {"opcaoRel": "01", "idPendRoyalties": True,
                                               "fimVencimento": ontem()}),
     "120601_SEMDATA": RotinaHTTP("120601", lambda p: {"opcaoRel": "01", "idPendRoyalties": True}),
+
+    # --- 13 Puxada ---
+    "13030401": RotinaHTTP("13030401", lambda p: {
+        "nrDias": "025", "idSegundaSexta": True, "idSabado": True, "idSubtraiTransito": True}),
 
     # --- 15 OBZ --- (listas = códigos concatenados com zeros à esquerda; 99/9999 = Todos)
     "150501": RotinaHTTP("150501", lambda p: {
