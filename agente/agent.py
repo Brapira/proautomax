@@ -103,11 +103,13 @@ JOBS = {
         "args": ["--runs", "1"], "sync_json": None, "parser": "critica",
     },
     # Cora: relatórios do Cora (critica, pedidos_mes...). A lista 'rotinas' da
-    # run vira argumento (node index.js critica); sem lista roda os ativos do
-    # config.json da corautomax.
+    # run vira argumento (node index.js critica); sem lista roda os ativos.
+    # painel_env: destino/ativo das rotinas 'cora' do painel vão na variável
+    # CORA_PAINEL e substituem os do config.json da corautomax.
     "cora": {
         "script": CORA_SCRIPT, "cwd": CORA_DIR, "bin": CORA_NODE,
         "args": [], "rotinas_args": True, "sync_json": None, "parser": "cora",
+        "painel_env": True,
     },
 }
 
@@ -425,6 +427,33 @@ def sincronizar_rotinas_json(periodo: str, emite, rotinas_filtro=None) -> bool:
     return True
 
 
+def rotinas_do_painel_cora(emite):
+    """
+    Rotinas 'cora' da tabela 'routines' no formato que a corautomax lê da
+    variável CORA_PAINEL: {codigo: {"destino": ..., "ativo": ...}}.
+    O destino é relativo à pasta da empresa (ex.: 'DataBeer - Documentos\\OTIF').
+    Devolve None se não conseguir ler (a corautomax usa só o config.json).
+    """
+    try:
+        rows = (
+            sb.table("routines")
+            .select("codigo,destino,ativo")
+            .eq("periodo", "cora")
+            .execute()
+            .data
+        ) or []
+    except Exception as e:
+        emite("WARNING", f"Não consegui ler 'routines' da Cora ({e}). Usando o config.json da corautomax.")
+        return None
+    painel = {
+        str(r["codigo"]): {"destino": r.get("destino") or "", "ativo": bool(r.get("ativo"))}
+        for r in rows
+    }
+    ativas = [c for c, v in painel.items() if v["ativo"]]
+    emite("INFO", f"🔄 Rotinas da Cora lidas do painel — ativas: {ativas or 'nenhuma'}")
+    return painel
+
+
 # ─── Execução de uma run ──────────────────────────────────────────────────────
 def claim_proxima_run():
     """Pega a run 'queued' mais antiga e a marca como 'running' (claim atômico)."""
@@ -514,6 +543,13 @@ def executar_run(run: dict):
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
+
+    # Cora: passa destino/ativo das rotinas do painel para a corautomax
+    if job.get("painel_env"):
+        painel = rotinas_do_painel_cora(emite)
+        if painel is not None:
+            env["CORA_PAINEL"] = json.dumps(painel, ensure_ascii=False)
+        buf.flush()
 
     rc = None
     estado = {"cancelado": False, "deletado": False}
