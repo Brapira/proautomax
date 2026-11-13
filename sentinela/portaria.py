@@ -188,7 +188,7 @@ class Portaria:
     def equipe_do_mapa(self, mapa: str, dias: int = 5) -> dict | None:
         """
         Motorista e ajudantes do mapa pela 03.11.29 (classificação Geral).
-        A data do relatório é a do mapa (montado na véspera), por isso a janela de dias.
+        A data do relatório é a do mapa; a janela de dias cobre mapa de dia anterior ainda aberto.
         """
         tela = self.promax.abrir_rotina(MENU_EQUIPE)
         hoje = date.today()
