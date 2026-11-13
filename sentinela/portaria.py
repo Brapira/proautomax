@@ -101,10 +101,23 @@ class Portaria:
             c.erro = "Promax pede o mapa e o Sentinela não informou"
             return c
         r = self._passo(tela, {**c.campos, "mapa": mapa}, "4")
-        c.campos.update({"mapa": mapa, **_valores(r)})
-        c.mensagens += _RE_ALERTA.findall(r)
+        # destino '0' só é posto no ramo de erro (54); os demais valores da resposta valem
+        c.campos.update({"mapa": mapa, **{k: v for k, v in _valores(r).items() if k != "destino"}})
+        # Mesmo esquema da placa: mensagem vazia = libera destino, motorista,
+        # lacres e Salvar (testado 13/11, FTG7799 + mapa 361526); senão o
+        # código diz o que a tela faz (01/02/54 voltam, 53 libera com aviso).
+        msg = re.search(r"if\(\s*'([^']*)'\s*==\s*''\s*\)", r)
+        cod = re.search(r"if\(\s*'(\d\d)'\s*==\s*'01'\s*\)", r)
+        msg, cod = (msg.group(1) if msg else None), (cod.group(1) if cod else None)
+        if msg:
+            c.mensagens.append(msg)
         c.opcoes_motorista = re.findall(r"new Option\s*\(([^)]*)\)", r)
-        c.lancavel = True   # sem captura ainda não sabemos distinguir alerta de erro aqui
+        if msg is None and cod is None:
+            c.erro = "; ".join(_RE_ALERTA.findall(r)) or "resposta inesperada do Promax ao carregar o mapa"
+        elif msg and cod != "53":
+            c.erro = msg
+        else:
+            c.lancavel = True
         return c
 
     # ---------- entrada ----------
