@@ -27,6 +27,8 @@ from promax_http.cliente import ENCODING, PromaxHTTP, RelatorioVazio, TelaRotina
 MENU_SAIDA = "031102010000"
 MENU_ENTRADA = "031102020000"
 MENU_NOTAS = "030237000000"
+MENU_EQUIPE = "031129000000"
+DESTINO_ROTA = "1"   # 1 = Rota, 2 = PA (ponto de apoio, fora da integração por enquanto)
 
 # all('campo').value = '...' | "..." | FormataCampo('...', ...)
 _RE_VALOR = re.compile(
@@ -56,6 +58,7 @@ class Consulta:
     mensagens: list[str] = field(default_factory=list)
     campos: dict[str, str] = field(default_factory=dict)   # como ficaria o form antes de salvar
     opcoes_motorista: list[str] = field(default_factory=list)
+    km_liberado: bool = False       # a tela libera o KM depois do mapa (flag do Promax por veículo)
 
 
 class Portaria:
@@ -112,6 +115,8 @@ class Portaria:
         if msg:
             c.mensagens.append(msg)
         c.opcoes_motorista = re.findall(r"new Option\s*\(([^)]*)\)", r)
+        km = re.search(r"if\(\s*'(\w*)'\s*==\s*'S'\s*\)\{\s*[^}]*?'kmAtual'\s*\)\.disabled\s*=\s*false", r)
+        c.km_liberado = bool(km and km.group(1) == "S")
         if msg is None and cod is None:
             c.erro = "; ".join(_RE_ALERTA.findall(r)) or "resposta inesperada do Promax ao carregar o mapa"
         elif msg and cod != "53":
@@ -177,6 +182,31 @@ class Portaria:
                 "valor": float(l["Total"].replace(".", "").replace(",", ".") or 0),
                 "chave": l["Chave de Acesso NF-e"], "emissao": l["Emissao"]})
         return notas
+
+    # ---------- equipe do mapa ----------
+
+    def equipe_do_mapa(self, mapa: str, dias: int = 5) -> dict | None:
+        """
+        Motorista e ajudantes do mapa pela 03.11.29 (classificação Geral).
+        A data do relatório é a do mapa (montado na véspera), por isso a janela de dias.
+        """
+        tela = self.promax.abrir_rotina(MENU_EQUIPE)
+        hoje = date.today()
+        try:
+            dados = self.promax.executar(tela, {
+                "opcaoRel": "3", "mapaInicial": mapa, "mapaFinal": mapa,
+                "dataInicial": (hoje - timedelta(days=dias)).strftime("%d/%m/%Y"), "dataFinal": hoje.strftime("%d/%m/%Y"),
+                "placaInicial": "", "placaFinal": "ZZZZZZZ", "regiaoInicial": "0", "regiaoFinal": "999",
+                "campoInicial": "0", "campoFinal": "99999"})
+        except RelatorioVazio:
+            return None
+        for l in csv.DictReader(io.StringIO(dados.decode(ENCODING, "replace")), delimiter=";"):
+            l = {(k or "").strip(): (v or "").strip() for k, v in l.items()}
+            if l.get("Mapa", "").lstrip("0") == mapa.lstrip("0"):
+                return {"motorista": l.get("Motorista") or None, "nomeMotorista": l.get("Nome Motorista") or None,
+                        "ajudante1": l.get("Ajudante 1") or None, "ajudante2": l.get("Ajudante 2") or None,
+                        "placa": l.get("Placa") or None}
+        return None
 
     # ---------- gravação ----------
 

@@ -36,7 +36,7 @@ import requests
 from dotenv import load_dotenv
 
 from promax_http.cliente import PromaxErro, PromaxHTTP, SessaoInvalida
-from sentinela.portaria import Consulta, Portaria
+from sentinela.portaria import DESTINO_ROTA, Consulta, Portaria
 
 RAIZ = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DIARIO = os.path.join(RAIZ, "logs", "sentinela_diario.sqlite")
@@ -172,12 +172,26 @@ class Robo:
                 avisos.append(f"mapa do Sentinela ({mapa}) difere do Promax ({c.campos.get('mapa')})")
             seria = {"call": "PW02212C" if evento == "saida" else "PW02213C", "opcao": "6", **c.campos}
             if evento == "saida":
-                km = (envio.get("viagem") or {}).get("km")
-                if km:
-                    seria["kmAtual"] = str(km)
-                cod = ((envio.get("viagem") or {}).get("motorista") or {}).get("codigoPromax")
-                if cod:
-                    seria["cdMotorista"] = str(cod)
+                viagem = envio.get("viagem") or {}
+                seria["destino"] = DESTINO_ROTA   # PA (ponto de apoio) fica fora por enquanto
+                for i in range(1, 5):
+                    seria.pop(f"lacre{i}", None)   # a portaria não lança lacre
+                if c.km_liberado:
+                    if not viagem.get("km"):
+                        raise ErroDefinitivo("o Promax pede o KM deste veículo e o Sentinela não informou")
+                    seria["kmAtual"] = str(viagem["km"])
+                # Motorista: o do Sentinela (QR) se houver; senão o escalado no mapa (03.11.29)
+                equipe = self._no_promax(lambda p: p.equipe_do_mapa(c.campos["mapa"].lstrip("0"))) if c.campos.get("mapa") else None
+                info["equipePromax"] = equipe
+                cod_sent = (viagem.get("motorista") or {}).get("codigoPromax")
+                cod_promax = (equipe or {}).get("motorista")
+                if cod_sent and cod_promax and int(cod_sent) != int(cod_promax):
+                    avisos.append(f"motorista do Sentinela ({cod_sent}) difere do escalado no mapa "
+                                  f"({cod_promax} {equipe.get('nomeMotorista')})")
+                cod = cod_sent or cod_promax
+                if not cod:
+                    raise ErroDefinitivo("motorista desconhecido: sem codigoPromax no Sentinela e sem escala na 03.11.29")
+                seria["cdMotorista"] = str(int(cod))
 
             if evento == "saida" and c.campos.get("mapa"):
                 # O Sentinela anexa as notas ao caminhão (devolução na volta)
