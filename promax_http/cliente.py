@@ -17,18 +17,32 @@ Reproduz o que o navegador faz (descoberto por captura de tráfego):
 
 import json
 import logging
+import os
 import random
 import re
+import sys
+import tempfile
 from html.parser import HTMLParser
 from urllib.parse import urlencode
 
 import requests
 import truststore
 
-# Verifica o HTTPS pelo repositório de certificados do Windows (igual ao Edge).
-# O servidor do Promax não envia o certificado intermediário da Sectigo; o
-# Windows completa a cadeia sozinho, o bundle padrão do requests (certifi) não.
-truststore.inject_into_ssl()
+# O servidor do Promax não envia o certificado intermediário da Sectigo.
+# Windows: o repositório do sistema completa a cadeia sozinho (igual ao Edge).
+# Linux (VM atlas): OpenSSL não completa — usamos o bundle do certifi + o
+# intermediário guardado em certs/ (público; válido até 2040).
+_BUNDLE_CA: str | None = None
+if sys.platform == "win32":
+    truststore.inject_into_ssl()
+else:
+    import certifi
+    _BUNDLE_CA = os.path.join(tempfile.gettempdir(), "promax_ca_bundle.pem")
+    _INTERMEDIARIO = os.path.join(os.path.dirname(__file__), "certs", "sectigo_ov_r40.pem")
+    with open(certifi.where(), "rb") as raiz, open(_INTERMEDIARIO, "rb") as inter:
+        conteudo = raiz.read() + b"\n" + inter.read()
+    with open(_BUNDLE_CA, "wb") as saida:
+        saida.write(conteudo)
 
 BASE = "https://brapira.promaxcloud.com.br/pw"
 CGI = f"{BASE}/cgi-bin/PP00100.exe"
@@ -219,6 +233,8 @@ class PromaxHTTP:
         self.timeout = timeout   # relatórios grandes demoram (a 12.06.01 leva minutos)
         self.http = requests.Session()
         self.http.headers.update(HEADERS)
+        if _BUNDLE_CA:
+            self.http.verify = _BUNDLE_CA
         self.session_id: str | None = None
 
     # ---------- baixo nível ----------
