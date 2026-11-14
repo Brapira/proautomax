@@ -454,6 +454,23 @@ def rotinas_do_painel_cora(emite):
     return painel
 
 
+def feriados_do_painel(emite):
+    """
+    Feriados extras cadastrados no painel (settings.feriados_extras, JSON
+    [{"data": "DD/MM" ou "DD/MM/AAAA", "descricao": ...}]). Devolve a lista de
+    datas para a variável CORA_FERIADOS, ou None se não conseguir ler (a
+    corautomax usa só o config.json).
+    """
+    try:
+        rows = sb.table("settings").select("valor").eq("chave", "feriados_extras").execute().data or []
+        lista = json.loads(rows[0]["valor"]) if rows and rows[0].get("valor") else []
+        datas = [str(f.get("data") if isinstance(f, dict) else f).strip() for f in lista]
+        return [d for d in datas if d]
+    except Exception as e:
+        emite("WARNING", f"Não consegui ler os feriados do painel ({e}). Usando o config.json da corautomax.")
+        return None
+
+
 # ─── Execução de uma run ──────────────────────────────────────────────────────
 def claim_proxima_run():
     """Pega a run 'queued' mais antiga e a marca como 'running' (claim atômico)."""
@@ -549,6 +566,9 @@ def executar_run(run: dict):
         painel = rotinas_do_painel_cora(emite)
         if painel is not None:
             env["CORA_PAINEL"] = json.dumps(painel, ensure_ascii=False)
+        feriados = feriados_do_painel(emite)
+        if feriados is not None:
+            env["CORA_FERIADOS"] = json.dumps(feriados, ensure_ascii=False)
         buf.flush()
 
     rc = None
