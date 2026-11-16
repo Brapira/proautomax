@@ -15,7 +15,7 @@ import traceback
 
 import pyautogui
 from function import capturar_form
-from function.config_rotinas import pular_hoje, resolver_item
+from function.config_rotinas import resolver_item
 from function.download import salvar_arquivo, marcar_inicio_rotina
 from function.ai_vision import diagnosticar_e_decidir, relatorio_uso_tokens
 from function.teams_notify import notificar_inicio, notificar_fim, notificar_erro_critico
@@ -79,11 +79,6 @@ def executar_rotinas(driver, rotinas_registradas, caminho_json):
         if codigo not in rotinas_registradas:
             logging.error(f"❌ Rotina '{codigo}' não registrada no loader")
             rotinas_erros.append(codigo)
-            continue
-
-        if pular_hoje(item):
-            logging.info(f"⏭️  [{idx}/{total}] '{codigo}' pulada — ontem foi domingo (pularDomingo=true)")
-            rotinas_ignoradas.append(codigo)
             continue
 
         # Resolve destino e nome do arquivo

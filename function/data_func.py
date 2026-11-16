@@ -42,6 +42,13 @@ def gerar_nome_mes_vigente():
 def ano_vigente():
     return datetime.today().strftime("%Y")
 
+def ontem_sem_domingo():
+    """Ontem; se ontem foi domingo, o sábado (na segunda pega o de sábado). Calculado na hora."""
+    dia = datetime.today() - timedelta(days=1)
+    if dia.weekday() == 6:
+        dia -= timedelta(days=1)
+    return dia
+
 def data_ontem_nome():
     ontem = hoje - timedelta(days=1)
     return ontem.strftime('%d.%m.%y')

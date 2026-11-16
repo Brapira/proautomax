@@ -23,7 +23,7 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from function.config_rotinas import carregar_config, pular_hoje, resolver_item
+from function.config_rotinas import carregar_config, resolver_item
 from function.teams_notify import notificar_erro_critico, notificar_fim, notificar_inicio
 from promax_http.cliente import PromaxHTTP, RelatorioVazio
 from promax_http.contas import contas_http
@@ -135,10 +135,6 @@ def main(caminho_json: str):
         logging.info(f"↪️  Sem versão HTTP validada (continuam no main.py): {fora}")
 
     resultado = Resultado()
-    for item in [i for i in http if pular_hoje(i)]:
-        logging.info(f"⏭️  {item['codigo']} pulada — ontem foi domingo")
-        resultado.anotar("ignoradas", item["codigo"])
-    http = [i for i in http if not pular_hoje(i)]
     if not http:
         logging.info("Nenhuma rotina ativa com versão HTTP. Nada a fazer.")
         return

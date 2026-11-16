@@ -18,6 +18,8 @@ from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Callable
 
+from function.data_func import ontem_sem_domingo
+
 from promax_http.cliente import (BASE, CGI, ENCODING, PromaxErro, PromaxHTTP, RelatorioVazio,
                                  _motivo, gerar_session_id)
 
@@ -80,18 +82,20 @@ def _baixar_030805(promax: PromaxHTTP, params: dict) -> bytes:
     03.08.05 não tem página de relatório: o Visualizar gera um .txt no
     Gerenciador de Arquivos (porta 8080) e avisa 'Arquivo gerado com sucesso'.
     O arquivo do dia D se chama 2artdDD_0001.txt.
+    Dia = ontem; na segunda, o sábado (domingo não tem movimento).
     """
+    dia = ontem_sem_domingo()
+    data = dia.strftime("%d/%m/%Y")
     rotina = ROTINAS["030805"]
     tela = promax.abrir_rotina(rotina.menu_id)
-    resp = promax.enviar(tela, {"opcaoRel": "1", "dataInicial": ontem(), "dataFinal": ontem()}, "1")
+    resp = promax.enviar(tela, {"opcaoRel": "1", "dataInicial": data, "dataFinal": data}, "1")
     html = resp.content.decode(ENCODING, errors="replace")
     if "gerado com sucesso" not in html.lower():
         raise RelatorioVazio(_motivo(html))
 
     # Abre a sessão no gerenciador com o mesmo SessionID do Promax
     promax.http.get(f"{GERENCIADOR_ARQUIVOS}/?sessionId={promax.session_id}", timeout=promax.timeout).raise_for_status()
-    dia = (hoje() - timedelta(days=1)).day
-    r = promax.http.get(f"{GERENCIADOR_ARQUIVOS}/arquivos/download/file/dvs/2artd{dia:02d}_0001.txt",
+    r = promax.http.get(f"{GERENCIADOR_ARQUIVOS}/arquivos/download/file/dvs/2artd{dia.day:02d}_0001.txt",
                         timeout=promax.timeout)
     r.raise_for_status()
     return r.content

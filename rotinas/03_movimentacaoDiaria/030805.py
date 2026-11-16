@@ -14,10 +14,8 @@ from selenium.webdriver.support import expected_conditions as EC
 from function.abrir_rotinas import abrir_rotinas
 from function.troca_janela import trocar_para_nova_janela
 from function.funcoes_rotina import aguardar_tela_carregar
-from datetime import date, timedelta
-
 from function.ai_vision import focar_janela_promax
-from function.data_func import data_ontem
+from function.data_func import ontem_sem_domingo
 
 CODIGO_ROTINA = "030805"
 
@@ -52,9 +50,12 @@ def executar(driver, **kwargs):
     driver.execute_script("document.all.opcaoRel.value = '1'; if(document.all.opcaoRel.onchange) document.all.opcaoRel.onchange();")
     logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Classificação configurada para Conferencia")
 
+    # Ontem; na segunda, o sábado (domingo não tem movimento)
+    dia = ontem_sem_domingo()
+    data = dia.strftime("%d/%m/%Y")
     wait.until(EC.presence_of_element_located((By.NAME, "dataInicial")))
-    driver.execute_script(f"document.all.dataInicial.value = '{data_ontem()}'; document.all.dataFinal.value = '{data_ontem()}';")
-    logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Datas configuradas para {data_ontem()}")
+    driver.execute_script(f"document.all.dataInicial.value = '{data}'; document.all.dataFinal.value = '{data}';")
+    logging.info(f"ROTINA {CODIGO_ROTINA}: ⚙️ Datas configuradas para {data}")
 
     # ── 4. Dispara o Visualizar ───────────────────────────────────────────────
     logging.info(f"📤 Executando Visualizar via JavaScript...")
@@ -86,8 +87,7 @@ def executar(driver, **kwargs):
     driver.get(f"http://brapira.promaxcloud.com.br:8080/?sessionId={session_id}")
     logging.info("🔐 Autenticado no Gerenciador de Arquivos")
 
-    dia = (date.today() - timedelta(days=1)).day
-    url = f"http://brapira.promaxcloud.com.br:8080/arquivos/download/file/dvs/2artd{dia:02d}_0001.txt"
+    url = f"http://brapira.promaxcloud.com.br:8080/arquivos/download/file/dvs/2artd{dia.day:02d}_0001.txt"
     logging.info("📥 Baixando arquivo do Gerenciador...")
     driver.get(url)
     logging.info("⏳ Aguardando download...")
