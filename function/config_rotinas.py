@@ -15,7 +15,9 @@ def carregar_config(caminho_json: str) -> list[dict]:
 
 
 def resolver_caminho(caminho: str) -> str:
-    return re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), m.group(0)), caminho)
+    """Troca ${VAR} pelo .env; as barras do painel (\\) viram o separador do sistema (Linux usa /)."""
+    caminho = re.sub(r"\$\{(\w+)\}", lambda m: os.environ.get(m.group(1), m.group(0)), caminho)
+    return caminho.replace("\\", os.sep).replace("/", os.sep)
 
 
 def resolver_item(item: dict) -> tuple[str, str, dict]:
