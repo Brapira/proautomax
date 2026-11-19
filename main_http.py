@@ -16,6 +16,7 @@ de uma fila — as pesadas primeiro, pra nenhuma grande sobrar pro final.
 import logging
 import os
 import queue
+import subprocess
 import sys
 import threading
 import time
@@ -50,7 +51,29 @@ def salvar(conteudo: bytes, destino: str, nome: str) -> str:
     with open(temporario, "wb") as f:
         f.write(conteudo)
     os.replace(temporario, caminho)
+    enviar_nuvem(caminho)
     return caminho
+
+
+def enviar_nuvem(caminho: str):
+    """
+    Sem a pasta do OneDrive sincronizada (ex.: Linux), RCLONE_REMOTE manda cada
+    arquivo salvo pro mesmo caminho relativo a DATABEER_BASE no remote:
+        DATABEER_BASE=/home/.../databeer_local   RCLONE_REMOTE=databeer:
+    Vazio (Windows com OneDrive) = não faz nada. Falha no envio = rotina com erro.
+    """
+    remote = os.getenv("RCLONE_REMOTE", "").strip()
+    if not remote:
+        return
+    rel = os.path.relpath(caminho, os.environ["DATABEER_BASE"])
+    if rel.startswith(".."):
+        raise RuntimeError(f"{caminho} fora do DATABEER_BASE: não sei pra onde mandar no {remote}")
+    rel = rel.replace(os.sep, "/")
+    alvo = remote + rel if remote.endswith((":", "/")) else f"{remote}/{rel}"
+    r = subprocess.run(["rclone", "copyto", caminho, alvo], capture_output=True, text=True, timeout=900)
+    if r.returncode != 0:
+        raise RuntimeError(f"rclone copyto falhou ({r.returncode}): {(r.stderr or r.stdout).strip()[-500:]}")
+    logging.info(f"☁️  enviado para {alvo}")
 
 
 class Resultado:

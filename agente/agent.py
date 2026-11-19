@@ -32,6 +32,7 @@ import os
 import re
 import json
 import shutil
+import signal
 import subprocess
 import sys
 import threading
@@ -58,6 +59,10 @@ SCRIPT_TARDE = os.getenv("SCRIPT_TARDE", "main_tarde.py")
 # Arquivos JSON de rotinas que cada script lê (na raiz do projeto)
 JSON_MANHA = os.getenv("JSON_MANHA", "rotinas.json")
 JSON_TARDE = os.getenv("JSON_TARDE", "rotinas_tarde.json")
+
+# Períodos que ESTE agente atende (ex.: "manha" no Linux, "critica,cora,tarde"
+# no Windows). Vazio = todos. Com dois agentes, cada período em um só.
+AGENT_PERIODOS = [p.strip().lower() for p in os.getenv("AGENT_PERIODOS", "").split(",") if p.strip()]
 
 POLL_SECONDS     = int(os.getenv("POLL_SECONDS", "5"))
 ENABLE_SCHEDULER = os.getenv("ENABLE_SCHEDULER", "true").lower() in ("1", "true", "sim", "yes")
@@ -474,14 +479,10 @@ def feriados_do_painel(emite):
 # ─── Execução de uma run ──────────────────────────────────────────────────────
 def claim_proxima_run():
     """Pega a run 'queued' mais antiga e a marca como 'running' (claim atômico)."""
-    sel = (
-        sb.table("runs")
-        .select("*")
-        .eq("status", "queued")
-        .order("created_at", desc=False)
-        .limit(1)
-        .execute()
-    )
+    q = sb.table("runs").select("*").eq("status", "queued")
+    if AGENT_PERIODOS:
+        q = q.in_("periodo", AGENT_PERIODOS)
+    sel = q.order("created_at", desc=False).limit(1).execute()
     if not sel.data:
         return None
 
@@ -507,7 +508,8 @@ def _matar_processo(proc):
                 capture_output=True,
             )
         else:
-            proc.terminate()
+            # O subprocesso abre um grupo próprio (start_new_session): mata o grupo todo
+            os.killpg(proc.pid, signal.SIGTERM)
     except Exception as e:
         log_console(f"⚠️ falha ao matar processo: {e}")
 
@@ -606,6 +608,7 @@ def executar_run(run: dict):
             bufsize=1,                  # line-buffered
             env=env,
             creationflags=creationflags,
+            start_new_session=os.name != "nt",
         )
 
         threading.Thread(target=watcher, args=(proc,), daemon=True).start()
@@ -788,6 +791,7 @@ def main():
     log_console(f"  Projeto : {PROJECT_DIR}")
     log_console(f"  Python  : {PYTHON_BIN}")
     log_console(f"  Poll    : {POLL_SECONDS}s | Agendador: {'ON' if ENABLE_SCHEDULER else 'OFF'}")
+    log_console(f"  Períodos: {', '.join(AGENT_PERIODOS) or 'todos'}")
     log_console("=" * 50)
 
     if ENABLE_SCHEDULER:

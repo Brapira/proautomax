@@ -1,0 +1,6 @@
+# Linux (atlas): main_http.py + agente + sentinela. O requirements.txt da raiz é do Selenium/Windows.
+requests
+python-dotenv
+truststore
+certifi
+supabase>=2.4.0
