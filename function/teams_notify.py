@@ -45,7 +45,7 @@ def _enviar(payload: dict) -> bool:
             json=payload,
             timeout=10,
         )
-        if response.status_code == 200:
+        if response.status_code in (200, 202):   # 202 = aceito (webhook do Power Automate)
             logging.info("📨 Notificação Teams enviada com sucesso")
             return True
         else:
