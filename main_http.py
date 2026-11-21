@@ -45,6 +45,9 @@ def configurar_log():
 
 def salvar(conteudo: bytes, destino: str, nome: str) -> str:
     """Grava num .tmp e troca no fim: quem lê a pasta nunca pega arquivo pela metade."""
+    if os.name != "nt" and (len(destino) > 1 and destino[1] == ":" or "${" in destino):
+        # No Linux, 'C:/...' viraria uma pasta 'C:' dentro do projeto
+        raise RuntimeError(f"Destino inválido neste servidor: {destino} (confira DATABEER_BASE no .env)")
     os.makedirs(destino, exist_ok=True)
     caminho = os.path.join(destino, nome)
     temporario = caminho + ".tmp"
