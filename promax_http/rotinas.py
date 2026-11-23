@@ -187,6 +187,9 @@ ROTINAS: dict[str, RotinaHTTP] = {
         "dataInicial": primeiro_dia_mes()}),
     "030237_SAIDA": RotinaHTTP("030237", lambda p: {
         **_030237_COMUM, "quebra2": "06", "dataInicial": primeiro_dia_mes(), "cdVisao": None}, pesada=True),
+    # Mapas (GeraCsv: opcao 7 pelo quadro). Data vazia = todos os mapas em aberto; os dois tipos marcados
+    "030312": RotinaHTTP("030312", lambda p: {"dataEmissao": "", "idAmbev": "S", "idMetalfrio": "S"},
+                         opcao="7", via_quadro=True),
     "030509": _030509,
     "030509_MES": _030509,
     "030805": RotinaHTTP("030805", especial=_baixar_030805),
