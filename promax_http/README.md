@@ -5,7 +5,7 @@ O código repete os mesmos pedidos que o navegador faz (descobertos por captura 
 
 ```
 python main_http.py                    # roda as rotinas validadas do rotinas.json
-python main_http.py rotinas_tarde.json
+python main_http.py rotinas_teste.json   # outro JSON
 ```
 
 Ele usa o mesmo JSON do `main.py` (`ativo`, `destino`, `nome`, `params`) e grava no mesmo lugar.
@@ -28,7 +28,7 @@ Rotinas ainda não migradas aparecem no log e continuam no `main.py`.
 até `HTTP_RETENTATIVAS` vezes (padrão 2, ou seja, até 3 tentativas). "Sem dados" não tenta de novo,
 porque o Promax responderia igual.
 
-**Agendador (agente/dash):** no `agente/.env`, `SCRIPT_MANHA=main_http.py` e `SCRIPT_TARDE=main_http_tarde.py`.
+**Agendador (agente/dash):** no `agente/.env`, `SCRIPT_MANHA=main_http.py` (padrão).
 O resumo no fim do log segue o mesmo formato do `main.py`, que é o que o dash lê.
 
 ## Como funciona

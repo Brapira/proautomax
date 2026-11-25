@@ -6,7 +6,7 @@ O painel **enfileira**; este agente **executa** e devolve logs/status/custos.
 ```
 Painel (Lovable)  ──insere run 'queued'──▶  Supabase  ◀──lê/escreve──  Agente (esta VM)
        ▲                                       │                            │
-       └──────── logs ao vivo (Realtime) ──────┘             dispara main.py / main_tarde.py
+       └──────── logs ao vivo (Realtime) ──────┘             dispara main_http.py / corautomax
 ```
 
 ## Por que um agente, e não só n8n / Power Automate?
@@ -23,7 +23,7 @@ mouse/tela e o IEDriver controla o Edge). Então a *execução* tem que acontece
 
 **Resumo:** mantenha este agente como núcleo. Se já usa n8n/PAD, use-os só para
 agendar: ponha `ENABLE_SCHEDULER=false` e deixe a ferramenta externa inserir uma
-linha em `runs` com `status='queued'` (e `periodo` = `manha` ou `tarde`).
+linha em `runs` com `status='queued'` (e `periodo` = `manha` ou `cora`).
 
 ## Instalação (na VM)
 
@@ -53,7 +53,7 @@ quando o usuário estiver conectado"** (interativo).
 
 - Pega a run `queued` mais antiga e marca como `running` (claim atômico — seguro
   mesmo com mais de um agente, embora o ideal seja **um só**).
-- Dispara `main.py` (manhã) ou `main_tarde.py` (tarde) na raiz do projeto.
+- Dispara `main_http.py` (manhã) ou a corautomax (cora).
 - Lê o stdout linha a linha → grava em `run_logs` (em lote, p/ não martelar o DB).
 - No fim, faz parse do resumo do `executor.py` (salvas/erro/ignoradas, tokens,
   custo USD/BRL, duração) e atualiza a linha em `runs`.

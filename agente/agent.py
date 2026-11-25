@@ -6,7 +6,7 @@ Ponte entre o painel web (Supabase) e o robô que roda nesta máquina Windows.
 O que ele faz, em loop:
   1. Procura no Supabase uma execução com status 'queued'.
   2. "Reivindica" a execução (status -> 'running').
-  3. Dispara o script certo (main.py p/ manhã, main_tarde.py p/ tarde) como
+  3. Dispara o script do período (main_http.py p/ manhã, index.js p/ cora) como
      subprocesso, NA RAIZ do projeto e numa sessão interativa (pyautogui precisa
      de tela real).
   4. Lê o stdout linha a linha e grava em 'run_logs' (o painel mostra ao vivo
@@ -48,20 +48,17 @@ load_dotenv()
 SUPABASE_URL         = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_SERVICE_KEY = os.getenv("SUPABASE_SERVICE_KEY", "")
 
-# Raiz do projeto ProAutoMax (onde estão main.py / main_tarde.py)
+# Raiz do projeto ProAutoMax (onde está o main_http.py)
 PROJECT_DIR = os.getenv("PROJECT_DIR", r"C:\ProAutoMax")
 # Interpretador Python que tem as deps do robô instaladas (venv de preferência)
 PYTHON_BIN  = os.getenv("PYTHON_BIN", sys.executable)
 
-SCRIPT_MANHA = os.getenv("SCRIPT_MANHA", "main.py")
-SCRIPT_TARDE = os.getenv("SCRIPT_TARDE", "main_tarde.py")
+SCRIPT_MANHA = os.getenv("SCRIPT_MANHA", "main_http.py")
 
 # Arquivos JSON de rotinas que cada script lê (na raiz do projeto)
 JSON_MANHA = os.getenv("JSON_MANHA", "rotinas.json")
-JSON_TARDE = os.getenv("JSON_TARDE", "rotinas_tarde.json")
 
-# Períodos que ESTE agente atende (ex.: "manha" no Linux, "critica,cora,tarde"
-# no Windows). Vazio = todos. Com dois agentes, cada período em um só.
+# Períodos que ESTE agente atende (ex.: "manha,cora"). Vazio = todos. Com dois agentes, cada período em um só.
 AGENT_PERIODOS = [p.strip().lower() for p in os.getenv("AGENT_PERIODOS", "").split(",") if p.strip()]
 
 POLL_SECONDS     = int(os.getenv("POLL_SECONDS", "5"))
@@ -76,11 +73,6 @@ SYNC_ROTINAS_JSON = os.getenv("SYNC_ROTINAS_JSON", "true").lower() in ("1", "tru
 # parado no minuto exato).
 AGENDADOR_TOLERANCIA_MIN = int(os.getenv("AGENDADOR_TOLERANCIA_MIN", "10"))
 
-# Config da Crítica (projeto Selenium SEPARADO do ProAutoMax)
-CRITICA_DIR    = os.getenv("CRITICA_DIR", r"C:\ProAutoCritica")
-CRITICA_PYTHON = os.getenv("CRITICA_PYTHON", PYTHON_BIN)  # venv próprio da crítica
-CRITICA_SCRIPT = os.getenv("CRITICA_SCRIPT", "main.py")
-
 # Config da Cora (corautomax — projeto Node/Playwright SEPARADO)
 CORA_DIR    = os.getenv("CORA_DIR", r"C:\Users\Macros\Desktop\Automacao\corautomax")
 CORA_NODE   = os.getenv("CORA_NODE", "node")
@@ -91,21 +83,11 @@ CORA_SCRIPT = os.getenv("CORA_SCRIPT", "index.js")
 #   args           : argumentos de linha de comando
 #   rotinas_args   : passa a lista 'rotinas' da run como argumentos do script
 #   sync_json      : nome do JSON de rotinas a sincronizar do painel (None = não sincroniza)
-#   parser         : formato de log/resumo ("proautomax", "critica" ou "cora")
+#   parser         : formato de log/resumo ("proautomax" ou "cora")
 JOBS = {
     "manha": {
         "script": SCRIPT_MANHA, "cwd": PROJECT_DIR, "bin": PYTHON_BIN,
         "args": [], "sync_json": JSON_MANHA, "parser": "proautomax",
-    },
-    "tarde": {
-        "script": SCRIPT_TARDE, "cwd": PROJECT_DIR, "bin": PYTHON_BIN,
-        "args": [], "sync_json": JSON_TARDE, "parser": "proautomax",
-    },
-    # Crítica: 1 ciclo por run (--runs 1). O intercalar da tarde vem da ORDEM
-    # de enfileiramento na fila, não de encadeamento interno.
-    "critica": {
-        "script": CRITICA_SCRIPT, "cwd": CRITICA_DIR, "bin": CRITICA_PYTHON,
-        "args": ["--runs", "1"], "sync_json": None, "parser": "critica",
     },
     # Cora: relatórios do Cora (critica, pedidos_mes...). A lista 'rotinas' da
     # run vira argumento (node index.js critica); sem lista roda os ativos.
@@ -195,10 +177,6 @@ class BufferLogs:
 # ─── Parsing das linhas vindas do robô ────────────────────────────────────────
 # ProAutoMax: "asctime | LEVEL | message"
 _RE_LINHA_PROAUTOMAX = re.compile(r"^.*?\|\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s*\|\s*(.*)$")
-# Crítica: "[HH:MM:SS] LEVEL nome.do.modulo: message"
-_RE_LINHA_CRITICA = re.compile(
-    r"^\[\d{1,2}:\d{2}:\d{2}\]\s*(DEBUG|INFO|WARNING|ERROR|CRITICAL)\s+\S+:\s*(.*)$"
-)
 # Cora: "[HH:MM:SS] message" (sem nível; deduzido pelo texto)
 _RE_LINHA_CORA = re.compile(r"^\[\d{1,2}:\d{2}:\d{2}\]\s*(.*)$")
 
@@ -218,8 +196,7 @@ def parse_linha(linha: str, parser: str = "proautomax"):
     linha = linha.rstrip("\n").rstrip("\r")
     if parser == "cora":
         return _parse_linha_cora(linha)
-    regex = _RE_LINHA_CRITICA if parser == "critica" else _RE_LINHA_PROAUTOMAX
-    m = regex.match(linha)
+    m = _RE_LINHA_PROAUTOMAX.match(linha)
     if m:
         return m.group(1), m.group(2)
     return "INFO", linha
@@ -248,8 +225,6 @@ def _resumo_vazio() -> dict:
 
 def parse_resumo(mensagens: list[str], parser: str = "proautomax") -> dict:
     """Escolhe o parser certo conforme o job."""
-    if parser == "critica":
-        return _parse_resumo_critica(mensagens)
     if parser == "cora":
         return _parse_resumo_cora(mensagens)
     return _parse_resumo_proautomax(mensagens)
@@ -293,28 +268,6 @@ def _parse_resumo_proautomax(mensagens: list[str]) -> dict:
     return res
 
 
-def _parse_resumo_critica(mensagens: list[str]) -> dict:
-    """
-    Resumo do executor da Crítica:
-        RESUMO: X sucesso(s), Y sem pedidos, Z falha(s)
-    Mapeia: salvas=X, ignoradas(sem pedidos)=Y, erros=Z. Sem custo de IA.
-    """
-    texto = "\n".join(mensagens)
-    res = _resumo_vazio()
-
-    m = re.search(
-        r"RESUMO:\s*(\d+)\s*sucesso.*?,\s*(\d+)\s*sem pedidos.*?,\s*(\d+)\s*falha",
-        texto,
-        re.IGNORECASE,
-    )
-    if m:
-        res["qtd_salvas"]    = int(m.group(1))
-        res["qtd_ignoradas"] = int(m.group(2))
-        res["qtd_erros"]     = int(m.group(3))
-        res["completou"]     = True
-    return res
-
-
 def _parse_resumo_cora(mensagens: list[str]) -> dict:
     """
     Resumo da corautomax (última linha do index.js):
@@ -346,7 +299,7 @@ def sincronizar_rotinas_json(periodo: str, emite, rotinas_filtro=None) -> bool:
 
     rotinas_filtro:
       - None  -> comportamento normal: usa TODAS as rotinas do período, cada uma
-                 com o seu ativo da tabela (a manhã/tarde "completa").
+                 com o seu ativo da tabela (a manhã "completa").
       - lista de códigos -> run CUSTOMIZADA: gera o JSON só com essas rotinas,
                  TODAS marcadas como ativo=True (roda exatamente o subconjunto),
                  sem tocar nos flags globais da tabela.

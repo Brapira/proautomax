@@ -2,7 +2,7 @@
 Executa as rotinas do Promax via HTTP — sem navegador, tela, IA ou pywinauto.
 
     python main_http.py                  # usa rotinas.json
-    python main_http.py rotinas_tarde.json
+    python main_http.py rotinas_teste.json       # outro JSON (ex.: teste de uma rotina)
 
 Lê o mesmo JSON do main.py (ativo, destino, nome, params) e roda as rotinas
 ativas que já têm versão HTTP validada (promax_http/rotinas.py). As demais
