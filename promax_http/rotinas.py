@@ -191,6 +191,12 @@ ROTINAS: dict[str, RotinaHTTP] = {
     "030312": RotinaHTTP("030312", lambda p: {"dataEmissao": "", "idAmbev": "S", "idMetalfrio": "S"},
                          opcao="7", via_quadro=True),
     "030509": _030509,
+    # Equipe dos mapas do dia (placa, motorista, ajudantes), classificação 3 = Geral.
+    # Captura de 27/11: o navegador manda só opcaoRel e as datas (as faixas ficam desabilitadas)
+    "031129": RotinaHTTP("031129", lambda p: {
+        "opcaoRel": "3", "dataInicial": hoje().strftime("%d/%m/%Y"), "dataFinal": hoje().strftime("%d/%m/%Y"),
+        **{c: None for c in ("mapaInicial", "mapaFinal", "placaInicial", "placaFinal",
+                             "regiaoInicial", "regiaoFinal", "campoInicial", "campoFinal")}}),
     "030509_MES": _030509,
     "030805": RotinaHTTP("030805", especial=_baixar_030805),
     "031120": RotinaHTTP("031120", lambda p: {"opcaoRel": "1", "dataInicial": primeiro_dia_mes()}),
