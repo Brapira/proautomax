@@ -8,6 +8,9 @@ Lê o mesmo JSON do main.py (ativo, destino, nome, params) e roda as rotinas
 ativas que já têm versão HTTP validada (promax_http/rotinas.py). As demais
 ficam de fora e aparecem no log — continuam pelo main.py (Selenium).
 
+Item com "api" (nome do destino, ver function/envio_api.py) também manda o
+relatório para essa API; falha no envio é aviso, não erro.
+
 Paralelismo: um trabalhador por conta de PROMAX_HTTP_CONTAS (ver
 promax_http/contas.py), cada um com a sua sessão, pegando a próxima rotina
 de uma fila — as pesadas primeiro, pra nenhuma grande sobrar pro final.
@@ -25,6 +28,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 
 from function.config_rotinas import carregar_config, resolver_item
+from function.envio_api import enviar_api
 from function.teams_notify import notificar_erro_critico, notificar_fim, notificar_inicio
 from promax_http.cliente import PromaxHTTP, RelatorioVazio
 from promax_http.contas import contas_http
@@ -103,6 +107,13 @@ def rodar_rotina(promax: PromaxHTTP, item: dict, tentativa: int, fila: queue.Que
     t0 = time.time()
     try:
         conteudo = ROTINAS[codigo].baixar(promax, params)
+        if item.get("api"):
+            # Antes de salvar: a API não depende do OneDrive. Falha aqui é só aviso
+            # (a próxima execução manda de novo); o arquivo segue o caminho normal.
+            try:
+                enviar_api(item["api"], codigo, conteudo)
+            except Exception as e:
+                logging.warning(f"⚠️ {codigo}: envio para a API '{item['api']}' falhou — {e}")
         caminho = salvar(conteudo, destino, nome)
         logging.info(f"✓ {codigo} salvo em {caminho} ({len(conteudo):,} bytes, {time.time() - t0:.0f}s)")
         resultado.anotar("salvas", codigo)
@@ -175,7 +186,10 @@ def main(caminho_json: str):
 
     n = min(len(contas), len(http))
     logging.info(f"🚀 {len(http)} rotina(s) HTTP com {n} conta(s) em paralelo: {[c[0] for c in contas[:n]]}")
-    notificar_inicio(caminho_json, rotinas_ativas=[i.get("descricao", i["codigo"]) for i in http])
+    # Execuções repetidas (ex.: a cada 15 min) não avisam no Teams, só se der erro
+    silencioso = os.getenv("TEAMS_SILENCIOSO") == "1"
+    if not silencioso:
+        notificar_inicio(caminho_json, rotinas_ativas=[i.get("descricao", i["codigo"]) for i in http])
     inicio = time.time()
 
     threads = [threading.Thread(target=trabalhador, args=(usuario, senha, fila, resultado), name=usuario)
@@ -196,8 +210,9 @@ def main(caminho_json: str):
 
     tempo = int(time.time() - inicio)
     logar_resumo(resultado, tempo)
-    notificar_fim(salvas=resultado.salvas, erros=resultado.erros, ignoradas=resultado.ignoradas,
-                  tempo_segundos=tempo)
+    if not silencioso or resultado.erros:
+        notificar_fim(salvas=resultado.salvas, erros=resultado.erros, ignoradas=resultado.ignoradas,
+                      tempo_segundos=tempo)
 
 
 def logar_resumo(resultado: Resultado, tempo: int):

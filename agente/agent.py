@@ -15,7 +15,8 @@ O que ele faz, em loop:
      atualiza a linha em 'runs'.
 
 Opcional: um agendador interno (thread) que lê a tabela 'schedules' e enfileira
-execuções no horário. Desligue (ENABLE_SCHEDULER=false) se for agendar por fora
+execuções no horário (ou a cada N min entre dois horários: schedules.repetir_min
+e schedules.ate; essas runs têm origem 'repeticao' e não avisam no Teams). Desligue (ENABLE_SCHEDULER=false) se for agendar por fora
 (n8n, Power Automate, Agendador de Tarefas do Windows, etc.) — nesse caso basta
 a ferramenta externa inserir uma linha em 'runs' com status='queued'.
 
@@ -358,6 +359,8 @@ def sincronizar_rotinas_json(periodo: str, emite, rotinas_filtro=None) -> bool:
         }
         if ext:
             item["extensao_download"] = ext
+        if (r.get("api_destino") or "").strip():
+            item["api"] = r["api_destino"].strip()   # "Enviar também por API" (function/envio_api.py)
         execucao.append(item)
 
     caminho = os.path.join(PROJECT_DIR, nome_json)
@@ -515,6 +518,8 @@ def executar_run(run: dict):
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUTF8"] = "1"
+    if run.get("origem") == "repeticao":
+        env["TEAMS_SILENCIOSO"] = "1"   # a cada N min: Teams só se der erro
 
     # Cora: passa destino/ativo das rotinas do painel para a corautomax
     if job.get("painel_env"):
@@ -635,8 +640,8 @@ def finalizar_run(run_id: str, run: dict, status: str, resumo: dict):
 # ─── Agendador interno (opcional) ─────────────────────────────────────────────
 # Convenção de dias_semana: 1=Seg, 2=Ter, 3=Qua, 4=Qui, 5=Sex, 6=Sáb, 7=Dom
 # (bate com o painel). Python weekday(): Seg=0 ... Dom=6  ->  +1
-def _enfileirar(periodo: str, rotinas=None):
-    payload = {"periodo": periodo, "status": "queued", "origem": "agendado"}
+def _enfileirar(periodo: str, rotinas=None, origem: str = "agendado"):
+    payload = {"periodo": periodo, "status": "queued", "origem": origem}
     if isinstance(rotinas, list) and rotinas:
         payload["rotinas"] = rotinas
     try:
@@ -671,6 +676,47 @@ def _ja_existe_agendada(periodo, ini, fim) -> bool:
         return False  # na dúvida não bloqueia (o set em memória ainda protege)
 
 
+def _slot_repeticao(ag, agora: datetime, hh: int, mm: int, repetir: int, grace: timedelta):
+    """
+    Agendamento com repetição ("a cada N min, de HH:MM até ATE"): devolve o
+    horário da vez se ele chegou há pouco (até a tolerância, nunca mais que N min),
+    senão None. O ATE entra (04:00–10:00 a cada 15 = 04:00, 04:15 ... 10:00).
+    """
+    inicio = agora.replace(hour=hh, minute=mm, second=0, microsecond=0)
+    try:
+        ah, am = (int(x) for x in (ag.get("ate") or "23:59")[:5].split(":"))
+    except Exception:
+        ah, am = 23, 59
+    fim = agora.replace(hour=ah, minute=am, second=0, microsecond=0)
+    if agora < inicio or fim < inicio:
+        return None
+    n = int((agora - inicio).total_seconds() // (repetir * 60))
+    slot = inicio + timedelta(minutes=n * repetir)
+    if slot > fim or agora - slot > min(grace, timedelta(minutes=repetir)):
+        return None
+    return slot
+
+
+def _repeticao_ja_tratada(periodo, rotinas, ini, fim) -> bool:
+    """
+    Já tem run desta repetição criada na janela do horário (agente reiniciou),
+    ou ainda uma na fila (o agente está ocupado, ex.: com a manhã inteira)?
+    Nos dois casos não enfileira outra — a fila não acumula execuções iguais.
+    """
+    def runs(q):
+        return q.eq("origem", "repeticao").eq("periodo", periodo).execute().data or []
+    try:
+        na_fila = runs(sb.table("runs").select("rotinas").eq("status", "queued"))
+        na_janela = runs(
+            sb.table("runs").select("rotinas")
+            .gte("created_at", ini.astimezone(timezone.utc).isoformat())
+            .lte("created_at", fim.astimezone(timezone.utc).isoformat())
+        )
+    except Exception:
+        return False  # na dúvida enfileira (o set em memória ainda protege)
+    return any((r.get("rotinas") or None) == (rotinas or None) for r in na_fila + na_janela)
+
+
 def loop_agendador():
     disparados: set[str] = set()
     log_console(f"⏰ agendador interno ATIVO (tolerância de {AGENDADOR_TOLERANCIA_MIN} min)")
@@ -698,6 +744,22 @@ def loop_agendador():
                 try:
                     hh, mm = (int(x) for x in horario.split(":")[:2])
                 except Exception:
+                    continue
+
+                repetir = int(ag.get("repetir_min") or 0)
+                if repetir > 0 and not ag.get("sequencia"):
+                    slot = _slot_repeticao(ag, agora, hh, mm, repetir, grace)
+                    if slot is None:
+                        continue
+                    chave = f"{hoje}:{ag['id']}:{slot:%H:%M}"
+                    if chave in disparados:
+                        continue
+                    disparados.add(chave)
+                    periodo = (ag.get("periodo") or "manha").lower()
+                    rotinas = ag.get("rotinas") if isinstance(ag.get("rotinas"), list) and ag.get("rotinas") else None
+                    if _repeticao_ja_tratada(periodo, rotinas, slot, slot + grace + timedelta(minutes=2)):
+                        continue
+                    _enfileirar(periodo, rotinas, origem="repeticao")
                     continue
 
                 agendado_dt = agora.replace(hour=hh, minute=mm, second=0, microsecond=0)
